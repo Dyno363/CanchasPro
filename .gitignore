@@ -1,0 +1,14 @@
+# Compilados de NetBeans / Ant
+build/
+dist/
+
+# Configuración local de cada computadora (no se comparte)
+nbproject/private/
+
+# Respaldos automáticos de los CSV
+data/backup/*.csv
+
+# Archivos del sistema
+*.class
+.DS_Store
+Thumbs.db
