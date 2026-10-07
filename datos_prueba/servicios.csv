@@ -1,0 +1,6 @@
+codigo;nombre;precio;cobroPorHora;activo
+S01;Balón profesional;25.00;false;true
+S02;Juego de chalecos;30.00;false;true
+S03;Árbitro;75.00;true;true
+S04;Iluminación extra;50.00;true;true
+S05;Garrafón de agua;20.00;false;true
