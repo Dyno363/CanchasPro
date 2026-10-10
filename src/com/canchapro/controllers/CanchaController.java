@@ -36,24 +36,26 @@ import java.util.StringJoiner;
  *       afectadas para que el operador las reprograme o cancele
  *
  */
+
 public class CanchaController {
+ 
     private final ComplejoDeportivo complejo;
     private final Sesion sesion;
-
+ 
     public CanchaController(ComplejoDeportivo complejo, Sesion sesion) {
         this.complejo = Objects.requireNonNull(complejo, "El complejo es obligatorio.");
         this.sesion = Objects.requireNonNull(sesion, "La sesión es obligatoria.");
     }
-
+ 
     // =====================================================================
     //  CONSULTAS (cualquier usuario)
     // =====================================================================
-
+ 
     /** @return todas las canchas en orden de código (para tablas y para el mapa) */
     public List<Cancha> listar() {
         return new ArrayList<>(complejo.getCanchas());
     }
-
+ 
     /** @return solo las canchas que aceptan reservas (para el combo de Nueva Reserva) */
     public List<Cancha> listarOperativas() {
         List<Cancha> resultado = new ArrayList<>();
@@ -64,12 +66,12 @@ public class CanchaController {
         }
         return resultado;
     }
-
+ 
     public Cancha obtener(String codigo) throws EntidadNoEncontradaException {
         return complejo.buscarCancha(codigo)
                 .orElseThrow(() -> new EntidadNoEncontradaException("No existe la cancha " + codigo + "."));
     }
-
+ 
     /**
      * Reservas que todavía no terminan (pendientes, confirmadas o en curso).
      * Son las que se ven afectadas por un cambio de horario o de estado.
@@ -83,23 +85,23 @@ public class CanchaController {
         }
         return activas;
     }
-
+ 
     public TipoCancha[] getTipos() {
         return TipoCancha.values();
     }
-
+ 
     public EstadoCancha[] getEstados() {
         return EstadoCancha.values();
     }
-
+ 
     public boolean puedeAdministrar() {
         return sesion.esAdministrador();
     }
-
+ 
     // =====================================================================
     //  OPERACIONES (solo administrador)
     // =====================================================================
-
+ 
     /**
      * Registra una cancha nueva; queda DISPONIBLE.
      */
@@ -112,7 +114,7 @@ public class CanchaController {
         complejo.agregarCancha(cancha);
         return cancha;
     }
-
+ 
     /**
      * Modifica nombre, tipo, capacidad y horario. El estado se cambia aparte
      * con {@link #cambiarEstado}.
@@ -128,11 +130,11 @@ public class CanchaController {
                              LocalTime apertura, LocalTime cierre) throws CanchaProException {
         sesion.exigirAdministrador("modificar canchas");
         Cancha cancha = obtener(codigo);
-
+ 
         // 1) Validar todo con un objeto de prueba
         validarCapacidad(tipo, capacidad);
         Cancha prueba = new Cancha(codigo, nombre, tipo, capacidad, cancha.getEstado(), apertura, cierre);
-
+ 
         StringJoiner fueraDeHorario = new StringJoiner(", ");
         for (Reserva reserva : getReservasActivas(codigo)) {
             if (!prueba.cubreHorario(reserva.getInicio(), reserva.getFin())) {
@@ -144,7 +146,7 @@ public class CanchaController {
                     + ") deja fuera reservas activas: " + fueraDeHorario
                     + ". Reprográmelas o cancélelas primero.");
         }
-
+ 
         // 2) Aplicar
         cancha.setNombre(nombre);
         cancha.setTipo(tipo);
@@ -152,7 +154,7 @@ public class CanchaController {
         cancha.setHorario(apertura, cierre);
         return cancha;
     }
-
+ 
     /**
      * Cambia el estado (Disponible / Mantenimiento / Inactiva).
      *
@@ -172,11 +174,57 @@ public class CanchaController {
         }
         return getReservasActivas(codigo);
     }
-
+ 
+    /** Cambia solo el horario de atención de una cancha (conserva los demás datos). */
+    public Cancha actualizarHorario(String codigo, LocalTime apertura, LocalTime cierre) throws CanchaProException {
+        Cancha c = obtener(codigo);
+        return actualizar(codigo, c.getNombre(), c.getTipo(), c.getCapacidad(), apertura, cierre);
+    }
+ 
+    /**
+     * Aplica el mismo horario de atención a TODAS las canchas.
+     *
+     * "Todo o nada": primero revisa todas las canchas; si alguna tiene reservas
+     * activas fuera del nuevo horario, no cambia ninguna.
+     *
+     * @return cantidad de canchas actualizadas
+     */
+    public int cambiarHorarioGeneral(LocalTime apertura, LocalTime cierre) throws CanchaProException {
+        sesion.exigirAdministrador("cambiar el horario de atención");
+        StringJoiner problemas = new StringJoiner("; ");
+        for (Cancha c : complejo.getCanchas()) {
+            Cancha prueba = new Cancha(c.getCodigo(), c.getNombre(), c.getTipo(), c.getCapacidad(),
+                    c.getEstado(), apertura, cierre);
+            StringJoiner fuera = new StringJoiner(", ");
+            for (Reserva r : getReservasActivas(c.getCodigo())) {
+                if (!prueba.cubreHorario(r.getInicio(), r.getFin())) {
+                    fuera.add(r.getCodigo());
+                }
+            }
+            if (fuera.length() > 0) {
+                problemas.add(c.getNombre() + ": " + fuera);
+            }
+        }
+        if (problemas.length() > 0) {
+            throw new CanchaProException("No se cambió ningún horario. Hay reservas activas fuera del nuevo horario ("
+                    + problemas + ").");
+        }
+        for (Cancha c : complejo.getCanchas()) {
+            c.setHorario(apertura, cierre);
+        }
+        return complejo.getCanchas().size();
+    }
+ 
+    /** Elimina una cancha SIN reservas (por ejemplo, registrada por error). */
+    public void eliminar(String codigo) throws CanchaProException {
+        sesion.exigirAdministrador("eliminar canchas");
+        complejo.eliminarCancha(codigo);
+    }
+ 
     // =====================================================================
     //  APOYO INTERNO
     // =====================================================================
-
+ 
     private static void validarCapacidad(TipoCancha tipo, int capacidad) throws DatoInvalidoException {
         if (tipo == null) {
             throw new DatoInvalidoException("El tipo de cancha es obligatorio.");
@@ -187,3 +235,4 @@ public class CanchaController {
         }
     }
 }
+ 

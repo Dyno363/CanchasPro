@@ -28,23 +28,24 @@ import java.util.Objects;
  * los usaron conservan su línea con el precio de aquel momento.
  */
 public class ServicioController {
+ 
     private final ComplejoDeportivo complejo;
     private final Sesion sesion;
-
+ 
     public ServicioController(ComplejoDeportivo complejo, Sesion sesion) {
         this.complejo = Objects.requireNonNull(complejo, "El complejo es obligatorio.");
         this.sesion = Objects.requireNonNull(sesion, "La sesión es obligatoria.");
     }
-
+ 
     // =====================================================================
     //  CONSULTAS (cualquier usuario)
     // =====================================================================
-
+ 
     /** @return todos los servicios (activos e inactivos), para la pantalla de administración */
     public List<ServicioAdicional> listar() {
         return new ArrayList<>(complejo.getServicios());
     }
-
+ 
     /** @return solo los que se pueden agregar a una reserva hoy */
     public List<ServicioAdicional> listarActivos() {
         List<ServicioAdicional> activos = new ArrayList<>();
@@ -55,12 +56,12 @@ public class ServicioController {
         }
         return activos;
     }
-
+ 
     public ServicioAdicional obtener(String codigo) throws EntidadNoEncontradaException {
         return complejo.buscarServicio(codigo)
                 .orElseThrow(() -> new EntidadNoEncontradaException("No existe el servicio " + codigo + "."));
     }
-
+ 
     /**
      * Cuánto costaría el servicio con el precio actual (vista previa en Nueva Reserva).
      *
@@ -70,15 +71,15 @@ public class ServicioController {
         Validador.validarEnteroPositivo(cantidad, "cantidad");
         return obtener(codigo).calcularCosto(cantidad, horas);
     }
-
+ 
     public boolean puedeAdministrar() {
         return sesion.esAdministrador();
     }
-
+ 
     // =====================================================================
     //  OPERACIONES (solo administrador)
     // =====================================================================
-
+ 
     /**
      * @param cobroPorHora true = se multiplica por las horas de la reserva (árbitro);
      *                     false = precio fijo por reserva (balón)
@@ -91,7 +92,7 @@ public class ServicioController {
         complejo.agregarServicio(servicio);
         return servicio;
     }
-
+ 
     /**
      * Cambiar el precio NO altera reservas ya hechas: cada una guardó el precio
      * del servicio al momento de agregarlo ("foto del precio").
@@ -100,27 +101,33 @@ public class ServicioController {
             throws CanchaProException {
         sesion.exigirAdministrador("modificar servicios");
         ServicioAdicional servicio = obtener(codigo);
-
+ 
         // 1) Validar todo con un objeto de prueba
         new ServicioAdicional(codigo, nombre, precio, cobroPorHora);
         exigirNombreLibre(nombre, servicio);
-
+ 
         // 2) Aplicar
         servicio.setNombre(nombre);
         servicio.setPrecio(precio);
         servicio.setCobroPorHora(cobroPorHora);
         return servicio;
     }
-
+ 
     public void cambiarEstado(String codigo, boolean activo) throws CanchaProException {
         sesion.exigirAdministrador("activar o desactivar servicios");
         obtener(codigo).setActivo(activo);
     }
-
+ 
+    /** Elimina un servicio que nunca se usó en una reserva. */
+    public void eliminar(String codigo) throws CanchaProException {
+        sesion.exigirAdministrador("eliminar servicios");
+        complejo.eliminarServicio(codigo);
+    }
+ 
     // =====================================================================
     //  APOYO INTERNO
     // =====================================================================
-
+ 
     /** Evita dos servicios llamados igual (sin importar tildes ni mayúsculas). */
     private void exigirNombreLibre(String nombre, ServicioAdicional actual) throws DatoInvalidoException {
         if (Validador.esVacio(nombre)) {
@@ -134,3 +141,4 @@ public class ServicioController {
         }
     }
 }
+ 

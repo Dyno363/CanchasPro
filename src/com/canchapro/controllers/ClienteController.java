@@ -33,25 +33,30 @@ import java.util.Optional;
  *  El código y la fecha de registro los pone el sistema, no el operador.
  * 
  */
-public class ClienteController {
-    private final ComplejoDeportivo complejo;
 
+public class ClienteController {
+ 
+    private final ComplejoDeportivo complejo;
+    private final Sesion sesion;
+ 
     /**
      * @param complejo sistema en memoria
+     * @param sesion   sesión del usuario (para el permiso de eliminar)
      */
-    public ClienteController(ComplejoDeportivo complejo) {
+    public ClienteController(ComplejoDeportivo complejo, Sesion sesion) {
         this.complejo = Objects.requireNonNull(complejo, "El complejo es obligatorio.");
+        this.sesion = Objects.requireNonNull(sesion, "La sesión es obligatoria.");
     }
-
+ 
     // =====================================================================
     //  CONSULTAS
     // =====================================================================
-
+ 
     /** @return todos los clientes ordenados por nombre */
     public List<Cliente> listar() {
         return complejo.buscarClientes("");
     }
-
+ 
     /**
      * Búsqueda por código, nombre (sin tildes ni mayúsculas) o teléfono.
      * Criterio vacío = todos.
@@ -59,7 +64,7 @@ public class ClienteController {
     public List<Cliente> buscar(String criterio) {
         return complejo.buscarClientes(criterio);
     }
-
+ 
     /**
      * @throws EntidadNoEncontradaException si el código no existe
      */
@@ -67,21 +72,21 @@ public class ClienteController {
         return complejo.buscarCliente(codigo)
                 .orElseThrow(() -> new EntidadNoEncontradaException("No existe el cliente " + codigo + "."));
     }
-
+ 
     /** @return reservas del cliente, de la más antigua a la más reciente */
     public List<Reserva> getHistorial(String codigoCliente) throws EntidadNoEncontradaException {
         return complejo.getReservasDeCliente(obtener(codigoCliente));
     }
-
+ 
     /** @return el código que recibirá el próximo cliente (para mostrarlo en el formulario) */
     public String getSiguienteCodigo() {
         return complejo.generarCodigo(GeneradorCodigo.Tipo.CLIENTE);
     }
-
+ 
     // =====================================================================
     //  OPERACIONES
     // =====================================================================
-
+ 
     /**
      * Registra un cliente nuevo en memoria.
      *
@@ -98,7 +103,7 @@ public class ClienteController {
         complejo.agregarCliente(cliente);
         return cliente;
     }
-
+ 
     /**
      * Modifica nombre, teléfono y correo. El código y la fecha de registro no cambian.
      *
@@ -110,24 +115,33 @@ public class ClienteController {
     public Cliente actualizar(String codigo, String nombre, String telefono, String correo)
             throws CanchaProException {
         Cliente cliente = obtener(codigo);
-
+ 
         // 1) Validar todo
         Validador.validarRequerido(nombre, "nombre");
         Validador.validarTelefono(telefono);
         Validador.validarCorreoOpcional(correo);
         exigirTelefonoLibre(telefono, cliente);
-
+ 
         // 2) Aplicar (ya no puede fallar)
         cliente.setNombre(nombre);
         cliente.setTelefono(telefono);
         cliente.setCorreo(correo);
         return cliente;
     }
-
+ 
+    /**
+     * Elimina un cliente registrado por error. Solo administrador y solo si el
+     * cliente nunca hizo una reserva (la regla vive en ComplejoDeportivo).
+     */
+    public void eliminar(String codigo) throws CanchaProException {
+        sesion.exigirAdministrador("eliminar clientes");
+        complejo.eliminarCliente(codigo);
+    }
+ 
     // =====================================================================
     //  APOYO INTERNO
     // =====================================================================
-
+ 
     /** Busca otro cliente con el mismo teléfono (comparando solo dígitos). */
     private Optional<Cliente> buscarPorTelefono(String telefono) {
         String digitos = Validador.normalizarTelefono(telefono);
@@ -138,7 +152,7 @@ public class ClienteController {
         }
         return Optional.empty();
     }
-
+ 
     /**
      * @param actual el cliente que se está editando (null si es uno nuevo);
      *               su propio teléfono no cuenta como duplicado

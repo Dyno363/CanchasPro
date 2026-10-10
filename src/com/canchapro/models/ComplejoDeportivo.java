@@ -3,6 +3,7 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
 package com.canchapro.models;
+
 import com.canchapro.models.canchas.CalculadoraTarifa;
 import com.canchapro.models.canchas.Cancha;
 import com.canchapro.models.canchas.Tarifa;
@@ -14,6 +15,8 @@ import com.canchapro.models.reservas.MotorDisponibilidad;
 import com.canchapro.models.reservas.Pago;
 import com.canchapro.models.reservas.Reserva;
 import com.canchapro.models.reservas.ServicioAdicional;
+import com.canchapro.models.reservas.ServicioReserva;
+import com.canchapro.models.tienda.DetalleVenta;
 import com.canchapro.models.tienda.Producto;
 import com.canchapro.models.tienda.Venta;
 import com.canchapro.utils.FechaUtil;
@@ -55,6 +58,7 @@ import java.util.Optional;
  * CalculadoraTarifa); así no se convierte en una clase que controla todo.
  */
 public class ComplejoDeportivo {
+
     private final Map<String, Cliente> clientes;
     private final Map<String, Usuario> usuarios;
     private final Map<String, Cancha> canchas;
@@ -423,6 +427,69 @@ public class ComplejoDeportivo {
     }
 
     // =====================================================================
+    //  ELIMINACIONES (solo registros SIN historial)
+    // =====================================================================
+    //  Regla: nunca se borra algo que aparece en reservas o ventas, porque se
+    //  perdería el historial y los reportes quedarían incompletos. En ese caso
+    //  lo correcto es desactivarlo (cancha INACTIVA, servicio/producto inactivo).
+
+    /** Elimina un cliente que nunca hizo una reserva (ej. registrado por error). */
+    public void eliminarCliente(String codigo) throws DatoInvalidoException {
+        Cliente cliente = exigirExistente(clientes, codigo, "el cliente");
+        int usos = 0;
+        for (Reserva r : reservas) {
+            if (r.getCliente().equals(cliente)) {
+                usos++;
+            }
+        }
+        exigirSinHistorial(usos, "el cliente " + cliente, "reservas", "Conserve el registro");
+        clientes.remove(codigo);
+    }
+
+    /** Elimina una cancha sin reservas. Si tiene historial, debe ponerse INACTIVA. */
+    public void eliminarCancha(String codigo) throws DatoInvalidoException {
+        Cancha cancha = exigirExistente(canchas, codigo, "la cancha");
+        int usos = 0;
+        for (Reserva r : reservas) {
+            if (r.getCancha().equals(cancha)) {
+                usos++;
+            }
+        }
+        exigirSinHistorial(usos, "la cancha " + cancha.getNombre(), "reservas", "Póngala INACTIVA");
+        canchas.remove(codigo);
+    }
+
+    /** Elimina un servicio que nunca se agregó a una reserva. */
+    public void eliminarServicio(String codigo) throws DatoInvalidoException {
+        ServicioAdicional servicio = exigirExistente(servicios, codigo, "el servicio");
+        int usos = 0;
+        for (Reserva r : reservas) {
+            for (ServicioReserva linea : r.getServicios()) {
+                if (linea.getServicio().equals(servicio)) {
+                    usos++;
+                }
+            }
+        }
+        exigirSinHistorial(usos, "el servicio " + servicio.getNombre(), "reservas", "Desactívelo");
+        servicios.remove(codigo);
+    }
+
+    /** Elimina un producto que nunca se vendió. */
+    public void eliminarProducto(String codigo) throws DatoInvalidoException {
+        Producto producto = exigirExistente(productos, codigo, "el producto");
+        int usos = 0;
+        for (Venta v : ventas) {
+            for (DetalleVenta d : v.getDetalles()) {
+                if (d.getProducto().equals(producto)) {
+                    usos++;
+                }
+            }
+        }
+        exigirSinHistorial(usos, "el producto " + producto.getNombre(), "ventas", "Desactívelo");
+        productos.remove(codigo);
+    }
+
+    // =====================================================================
     //  CÓDIGOS CORRELATIVOS
     // =====================================================================
 
@@ -492,6 +559,23 @@ public class ComplejoDeportivo {
     private static void exigirNoNulo(Object objeto, String nombre) throws DatoInvalidoException {
         if (objeto == null) {
             throw new DatoInvalidoException("El dato '" + nombre + "' es obligatorio.");
+        }
+    }
+
+    private static <T> T exigirExistente(Map<String, T> mapa, String codigo, String nombre)
+            throws DatoInvalidoException {
+        T objeto = mapa.get(codigo);
+        if (objeto == null) {
+            throw new DatoInvalidoException("No existe " + nombre + " " + codigo + ".");
+        }
+        return objeto;
+    }
+
+    private static void exigirSinHistorial(int usos, String que, String donde, String alternativa)
+            throws DatoInvalidoException {
+        if (usos > 0) {
+            throw new DatoInvalidoException("No se puede eliminar " + que + ": aparece en " + usos + " "
+                    + donde + " del historial. " + alternativa + " en su lugar.");
         }
     }
 
