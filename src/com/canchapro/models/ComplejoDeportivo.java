@@ -488,7 +488,27 @@ public class ComplejoDeportivo {
         exigirSinHistorial(usos, "el producto " + producto.getNombre(), "ventas", "Desactívelo");
         productos.remove(codigo);
     }
-
+/**
+     * Borra TODOS los datos de operación y catálogo, pero CONSERVA los usuarios
+     * (para poder seguir entrando al sistema) y la configuración.
+     *
+     * Lo usa solo el panel del desarrollador ("Eliminar todos los datos"),
+     * que antes hace un respaldo de los archivos.
+     *
+     * @return cantidad de registros eliminados (para mostrar el resumen)
+     */
+    public int vaciarDatos() {
+        int eliminados = clientes.size() + canchas.size() + servicios.size() + productos.size()
+                + tarifas.size() + reservas.size() + ventas.size();
+        ventas.clear();
+        reservas.clear();
+        clientes.clear();
+        canchas.clear();
+        servicios.clear();
+        productos.clear();
+        tarifas.clear(); // misma lista que usa la CalculadoraTarifa: queda vacía también allí
+        return eliminados;
+    }
     // =====================================================================
     //  CÓDIGOS CORRELATIVOS
     // =====================================================================

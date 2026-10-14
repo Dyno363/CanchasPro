@@ -16,6 +16,8 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.TreeSet;
+import java.util.Map;
 /**
  *
  * @author SANTANA
@@ -29,8 +31,8 @@ import java.util.Properties;
  *   modulo_tienda=true
  *   minutos_limpieza=0
  *   porcentaje_anticipo_minimo=0
- * 
- *
+ *   clave_desarrollador=7691a81c...   
+ *   color.PRIMARIO=#1E7A46           
  * Regla de tolerancia: un valor faltante o inválido NUNCA impide que el sistema
  * arranque. Se usa el valor por defecto y se anota en el ResultadoCarga.
  */
@@ -41,6 +43,8 @@ public class ArchivoConfiguracion {
     public static final String CLAVE_TIENDA = "modulo_tienda";
     public static final String CLAVE_LIMPIEZA = "minutos_limpieza";
     public static final String CLAVE_ANTICIPO = "porcentaje_anticipo_minimo";
+    public static final String CLAVE_DESARROLLADOR = "clave_desarrollador";
+    public static final String PREFIJO_COLOR = "color.";
 
     private ArchivoConfiguracion() {
         // No se instancia: solo métodos estáticos.
@@ -114,6 +118,26 @@ public class ArchivoConfiguracion {
             }
         }
 
+        // Claves OPCIONALES: si faltan no hay advertencia (se usan los valores de fábrica).
+        String claveDev = propiedades.getProperty(CLAVE_DESARROLLADOR);
+        if (claveDev != null && !claveDev.isBlank()) {
+            try {
+                config.setClaveDesarrolladorHash(claveDev.trim());
+            } catch (DatoInvalidoException e) {
+                reportarInvalido(CLAVE_DESARROLLADOR, e, nombreArchivo, resultado);
+            }
+        }
+        // Cada color se valida por separado: uno malo no impide cargar los demás.
+        for (String clave : new TreeSet<>(propiedades.stringPropertyNames())) {
+            if (clave.startsWith(PREFIJO_COLOR)) {
+                try {
+                    config.setColor(clave, propiedades.getProperty(clave).trim());
+                } catch (DatoInvalidoException e) {
+                    reportarInvalido(clave, e, nombreArchivo, resultado);
+                }
+            }
+        }
+
         resultado.registrarCarga(nombreArchivo);
         return config;
     }
@@ -138,6 +162,14 @@ public class ArchivoConfiguracion {
         lineas.add(CLAVE_TIENDA + "=" + config.isModuloTiendaActivo());
         lineas.add(CLAVE_LIMPIEZA + "=" + config.getMinutosLimpieza());
         lineas.add(CLAVE_ANTICIPO + "=" + formatearDecimal(config.getPorcentajeAnticipoMinimo()));
+        lineas.add("# clave_desarrollador: hash SHA-256 de la clave del panel oculto (Ctrl+Shift+D)");
+        lineas.add(CLAVE_DESARROLLADOR + "=" + config.getClaveDesarrolladorHash());
+        if (!config.getColores().isEmpty()) {
+            lineas.add("# Colores de la interfaz (#RRGGBB). Si se borran, se usan los de fábrica.");
+            for (Map.Entry<String, String> color : config.getColores().entrySet()) {
+                lineas.add(color.getKey() + "=" + color.getValue());
+            }
+        }
 
         Path carpeta = archivo.toAbsolutePath().getParent();
         if (carpeta != null) {
