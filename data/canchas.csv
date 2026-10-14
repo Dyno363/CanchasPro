@@ -2,3 +2,4 @@ codigo;nombre;tipo;capacidad;estado;horaApertura;horaCierre
 C01;La Bombonera;FUTBOL_5;10;DISPONIBLE;08:00;23:00
 C02;El Maracaná;FUTBOL_5;10;DISPONIBLE;08:00;23:00
 C03;El Monumental;FUTBOL_7;14;DISPONIBLE;08:00;23:00
+C04;Carlos Salazar Hijo;FUTBOL_7;14;DISPONIBLE;08:00;23:00

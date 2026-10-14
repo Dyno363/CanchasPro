@@ -2,6 +2,7 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
+
 package com.canchapro;
 
 import com.canchapro.controllers.CanchaController;
@@ -14,6 +15,7 @@ import com.canchapro.controllers.PosController;
 import com.canchapro.controllers.ReporteController;
 import com.canchapro.controllers.ReservaController;
 import com.canchapro.controllers.Sesion;
+import com.canchapro.controllers.ServicioController;
 import com.canchapro.controllers.SistemaController;
 import com.canchapro.controllers.TarifaController;
 import com.canchapro.controllers.TiendaController;
@@ -22,8 +24,11 @@ import com.canchapro.models.ConfiguracionSistema;
 import com.canchapro.models.canchas.CalculadoraTarifa;
 import com.canchapro.models.canchas.Cancha;
 import com.canchapro.models.canchas.Tarifa;
+import com.canchapro.models.canchas.TarifaEspecial;
+import com.canchapro.models.canchas.TarifaFranja;
 import com.canchapro.models.enums.CategoriaProducto;
 import com.canchapro.models.enums.EstadoCancha;
+import com.canchapro.models.enums.EstadoProducto;
 import com.canchapro.models.enums.EstadoReserva;
 import com.canchapro.models.enums.MetodoPago;
 import com.canchapro.models.enums.RolUsuario;
@@ -43,42 +48,46 @@ import com.canchapro.persistence.ResultadoCarga;
 import com.canchapro.utils.FechaUtil;
 import com.canchapro.utils.MonedaUtil;
 import com.canchapro.utils.Validador;
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.Set;
 import java.util.stream.Stream;
-import java.io.FileDescriptor;
-import java.io.FileOutputStream;
-import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
+
 /**
  * CanchaPro en CONSOLA: el sistema completo, sin interfaz gráfica.
  *
- *Esta clase es una VISTA de texto. Igual que lo harán las ventanas Swing,
+ * Esta clase es una VISTA de texto. Igual que lo harán las ventanas Swing,
  * solo hace tres cosas: pedir datos, llamar a un controlador y mostrar el
  * resultado o el mensaje de error. No calcula precios, no valida reglas y no
  * escribe archivos (eso lo hacen los controladores y el modelo).
  *
  * Al iniciar se elige:
- * <ol>
- *   <li><b>Datos reales</b> (carpeta data/): al salir se guardan los cambios.</li>
- *   <li><b>Copia temporal</b> de datos_prueba/: para practicar sin miedo; se borra al salir.</li>
- * </ol>
+ * 
+ *   Datos reales (carpeta data/): al salir se guardan los cambios.
+ *   Copia temporal de datos_prueba/: para practicar sin miedo; se borra al salir.
+ * 
  *
  */
 public class CanchaProConsola {
 
-    private final Scanner entrada = new Scanner(System.in);
+    private final Scanner entrada = new Scanner(System.in, StandardCharsets.UTF_8);
     private SistemaController sistema;
     private Path carpetaTemporal;
 
@@ -93,6 +102,8 @@ public class CanchaProConsola {
     }
 
     public static void main(String[] args) {
+        // Tildes y ñ correctas en la consola de NetBeans: se escribe y se lee en UTF-8.
+        System.setOut(new PrintStream(new FileOutputStream(FileDescriptor.out), true, StandardCharsets.UTF_8));
         new CanchaProConsola().ejecutar();
     }
 
@@ -185,13 +196,17 @@ public class CanchaProConsola {
             System.out.println("  4. Clientes");
             System.out.println("  5. Tienda / Cafetería" + (tienda ? "" : "  (módulo desactivado)"));
             System.out.println("  6. Reportes");
-            System.out.println("  7. Canchas, tarifas y servicios");
-            System.out.println("  8. Usuarios" + (sesion.esAdministrador() ? "" : "  (solo administrador)"));
-            System.out.println("  9. Configuración y Guardar Sistema");
-            System.out.println(" 10. Cambiar mi contraseña");
-            System.out.println(" 11. Cerrar sesión (volver al login)");
+            System.out.println("  --- Administración ---");
+            System.out.println("  7. Canchas y horarios de atención");
+            System.out.println("  8. Tarifas (franjas y especiales)");
+            System.out.println("  9. Servicios adicionales");
+            System.out.println(" 10. Usuarios" + admin());
+            System.out.println(" 11. Configuración y Guardar Sistema");
+            System.out.println("  --- Cuenta ---");
+            System.out.println(" 12. Cambiar mi contraseña");
+            System.out.println(" 13. Cerrar sesión (volver al login)");
             System.out.println("  0. Salir del programa");
-            switch (leerOpcion(0, 11)) {
+            switch (leerOpcion(0, 13)) {
                 case 1: menuReservas(); break;
                 case 2: menuPagos(); break;
                 case 3: menuMapa(); break;
@@ -199,10 +214,12 @@ public class CanchaProConsola {
                 case 5: menuTienda(); break;
                 case 6: menuReportes(); break;
                 case 7: menuCanchas(); break;
-                case 8: menuUsuarios(); break;
-                case 9: menuConfiguracion(); break;
-                case 10: accion(this::cambiarMiContrasena); break;
-                case 11:
+                case 8: menuTarifas(); break;
+                case 9: menuServicios(); break;
+                case 10: menuUsuarios(); break;
+                case 11: menuConfiguracion(); break;
+                case 12: accion(this::cambiarMiContrasena); break;
+                case 13:
                     sistema.cerrarSesion();
                     ok("Sesión cerrada.");
                     return false;
@@ -537,8 +554,9 @@ public class CanchaProConsola {
             System.out.println("  2. Registrar cliente");
             System.out.println("  3. Editar cliente");
             System.out.println("  4. Historial de reservas de un cliente");
+            System.out.println("  5. Eliminar cliente (solo sin reservas)" + admin());
             System.out.println("  0. Volver");
-            switch (leerOpcion(0, 4)) {
+            switch (leerOpcion(0, 5)) {
                 case 1: {
                     List<Object[]> filas = new ArrayList<>();
                     for (Cliente c : cc.buscar(leerOpcional("Buscar (Enter = todos)"))) {
@@ -565,6 +583,13 @@ public class CanchaProConsola {
                                 MonedaUtil.formatear(r.calcularTotal())});
                     }
                     tabla(new String[]{"Reserva", "Cancha", "Horario", "Estado", "Total"}, filas);
+                }); break;
+                case 5: accion(() -> {
+                    Cliente c = cc.obtener(leerCodigo("Código de cliente"));
+                    if (leerSiNo("¿Eliminar a " + c + "?")) {
+                        cc.eliminar(c.getCodigo());
+                        ok("Cliente eliminado.");
+                    }
                 }); break;
                 default: return;
             }
@@ -595,10 +620,13 @@ public class CanchaProConsola {
             System.out.println("  2. Productos bajo stock mínimo");
             System.out.println("  3. Venta de mostrador (POS sin reserva)");
             System.out.println("  4. Reponer inventario");
-            System.out.println("  5. Registrar producto (administrador)");
+            System.out.println("  5. Registrar producto" + admin());
             System.out.println("  6. Ventas de hoy");
+            System.out.println("  7. Modificar producto" + admin());
+            System.out.println("  8. Activar / desactivar producto" + admin());
+            System.out.println("  9. Eliminar producto (solo si nunca se vendió)" + admin());
             System.out.println("  0. Volver");
-            switch (leerOpcion(0, 6)) {
+            switch (leerOpcion(0, 9)) {
                 case 1: imprimirProductos(tc.listarProductos()); break;
                 case 2: imprimirProductos(tc.getProductosBajoMinimo()); break;
                 case 3: accion(() -> {
@@ -627,6 +655,28 @@ public class CanchaProConsola {
                             + MonedaUtil.formatear(tc.getTotalVendido(FechaUtil.ahora().toLocalDate())));
                     break;
                 }
+                case 7: accion(() -> {
+                    Producto p = tc.obtener(leerCodigo("Código de producto"));
+                    System.out.println("  (Enter = conservar el valor actual)");
+                    String nombre = leerConDefecto("Nombre", p.getNombre());
+                    CategoriaProducto cat = elegirEnumConDefecto("Categoría", tc.getCategorias(), p.getCategoria());
+                    double precio = leerMontoConDefecto("Precio", p.getPrecio());
+                    int minimo = leerEnteroConDefecto("Stock mínimo", p.getStockMinimo());
+                    ok("Actualizado: " + tc.actualizarProducto(p.getCodigo(), nombre, cat, precio, minimo));
+                }); break;
+                case 8: accion(() -> {
+                    String codigo = leerCodigo("Código de producto");
+                    EstadoProducto estado = elegirEnum("Nuevo estado", tc.getEstados(), false);
+                    tc.cambiarEstado(codigo, estado);
+                    ok("Producto " + codigo + ": " + estado);
+                }); break;
+                case 9: accion(() -> {
+                    Producto p = tc.obtener(leerCodigo("Código de producto"));
+                    if (leerSiNo("¿Eliminar " + p + "?")) {
+                        tc.eliminarProducto(p.getCodigo());
+                        ok("Producto eliminado.");
+                    }
+                }); break;
                 default: return;
             }
         }
@@ -700,51 +750,181 @@ public class CanchaProConsola {
     }
 
     // =====================================================================
-    //  7. CANCHAS, TARIFAS Y SERVICIOS
+    //  7. CANCHAS Y HORARIOS DE ATENCIÓN
     // =====================================================================
 
     private void menuCanchas() {
         CanchaController cc = sistema.getCanchaController();
-        TarifaController tc = sistema.getTarifaController();
         while (true) {
-            subtitulo("CANCHAS, TARIFAS Y SERVICIOS");
+            subtitulo("CANCHAS Y HORARIOS DE ATENCIÓN");
             System.out.println("  1. Listar canchas");
-            System.out.println("  2. Cambiar estado de una cancha (administrador)");
-            System.out.println("  3. Listar tarifas");
-            System.out.println("  4. Cotizar precio de cancha");
-            System.out.println("  5. Revisar horarios sin tarifa");
-            System.out.println("  6. Crear tarifa especial (administrador)");
-            System.out.println("  7. Listar servicios adicionales");
+            System.out.println("  2. Registrar cancha" + admin());
+            System.out.println("  3. Modificar cancha (nombre, tipo, capacidad, horario)" + admin());
+            System.out.println("  4. Cambiar horario de atención de UNA cancha" + admin());
+            System.out.println("  5. Cambiar horario de atención de TODAS las canchas" + admin());
+            System.out.println("  6. Cambiar estado (Disponible / Mantenimiento / Inactiva)" + admin());
+            System.out.println("  7. Eliminar cancha (solo sin reservas)" + admin());
+            System.out.println("  8. Ver reservas activas de una cancha");
             System.out.println("  0. Volver");
-            switch (leerOpcion(0, 7)) {
-                case 1: {
-                    List<Object[]> filas = new ArrayList<>();
-                    for (Cancha c : cc.listar()) {
-                        filas.add(new Object[]{c.getCodigo(), c.getNombre(), c.getTipo(), c.getCapacidad(),
-                                c.getEstado(), c.getHorarioTexto()});
-                    }
-                    tabla(new String[]{"Código", "Nombre", "Tipo", "Capacidad", "Estado", "Horario"}, filas);
-                    break;
-                }
+            switch (leerOpcion(0, 8)) {
+                case 1: imprimirCanchas(cc.listar()); break;
                 case 2: accion(() -> {
+                    String nombre = leer("Nombre de la cancha");
+                    TipoCancha tipo = elegirEnum("Tipo", cc.getTipos(), false);
+                    int capacidad = leerEntero("Capacidad (jugadores, máx. " + tipo.getJugadoresMaximos() + ")");
+                    LocalTime abre = leerHora("Hora de apertura HH:mm");
+                    LocalTime cierra = leerHora("Hora de cierre HH:mm");
+                    ok("Cancha registrada: " + cc.crear(nombre, tipo, capacidad, abre, cierra));
+                    avisarHuecosDeTarifa();
+                }); break;
+                case 3: accion(() -> {
+                    Cancha c = cc.obtener(leerCodigo("Código de cancha"));
+                    System.out.println("  (Enter = conservar el valor actual)");
+                    String nombre = leerConDefecto("Nombre", c.getNombre());
+                    TipoCancha tipo = elegirEnumConDefecto("Tipo", cc.getTipos(), c.getTipo());
+                    int capacidad = leerEnteroConDefecto("Capacidad", c.getCapacidad());
+                    LocalTime abre = leerHoraConDefecto("Hora de apertura", c.getHoraApertura());
+                    LocalTime cierra = leerHoraConDefecto("Hora de cierre", c.getHoraCierre());
+                    ok("Actualizada: " + cc.actualizar(c.getCodigo(), nombre, tipo, capacidad, abre, cierra)
+                            + " [" + c.getHorarioTexto() + "]");
+                    avisarHuecosDeTarifa();
+                }); break;
+                case 4: accion(() -> {
+                    Cancha c = cc.obtener(leerCodigo("Código de cancha"));
+                    System.out.println("  Horario actual: " + c.getHorarioTexto());
+                    LocalTime abre = leerHoraConDefecto("Nueva hora de apertura", c.getHoraApertura());
+                    LocalTime cierra = leerHoraConDefecto("Nueva hora de cierre", c.getHoraCierre());
+                    ok(cc.actualizarHorario(c.getCodigo(), abre, cierra) + " ahora atiende " + c.getHorarioTexto());
+                    avisarHuecosDeTarifa();
+                }); break;
+                case 5: accion(() -> {
+                    LocalTime abre = leerHora("Hora de apertura para TODAS las canchas HH:mm");
+                    LocalTime cierra = leerHora("Hora de cierre para TODAS las canchas HH:mm");
+                    ok(cc.cambiarHorarioGeneral(abre, cierra) + " canchas atienden ahora de "
+                            + FechaUtil.formatearHora(abre) + " a " + FechaUtil.formatearHora(cierra) + ".");
+                    avisarHuecosDeTarifa();
+                }); break;
+                case 6: accion(() -> {
                     String codigo = leerCodigo("Código de cancha");
                     EstadoCancha estado = elegirEnum("Nuevo estado", cc.getEstados(), false);
                     List<Reserva> afectadas = cc.cambiarEstado(codigo, estado);
-                    ok("Estado actualizado.");
+                    ok("Estado actualizado a " + estado + ".");
                     for (Reserva r : afectadas) {
                         System.out.println("  [AVISO] Reserva activa afectada: " + r);
                     }
                 }); break;
-                case 3: {
-                    List<Object[]> filas = new ArrayList<>();
-                    for (Tarifa t : tc.listar()) {
-                        filas.add(new Object[]{t.getCodigo(), t.getTipoTarifa(), t.getNombre(),
-                                MonedaUtil.formatear(t.getPrecioHora()), t.getPrioridad(), t.getDescripcionAplicacion()});
+                case 7: accion(() -> {
+                    Cancha c = cc.obtener(leerCodigo("Código de cancha"));
+                    if (leerSiNo("¿Eliminar " + c + "?")) {
+                        cc.eliminar(c.getCodigo());
+                        ok("Cancha eliminada.");
                     }
-                    tabla(new String[]{"Código", "Tipo", "Nombre", "Precio/h", "Prioridad", "Aplica"}, filas);
-                    break;
-                }
-                case 4: accion(() -> {
+                }); break;
+                case 8: accion(() -> {
+                    List<Reserva> activas = cc.getReservasActivas(leerCodigo("Código de cancha"));
+                    if (activas.isEmpty()) {
+                        System.out.println("  (sin reservas activas)");
+                    }
+                    for (Reserva r : activas) {
+                        System.out.println("    " + r);
+                    }
+                }); break;
+                default: return;
+            }
+        }
+    }
+
+    private void imprimirCanchas(List<Cancha> canchas) {
+        List<Object[]> filas = new ArrayList<>();
+        for (Cancha c : canchas) {
+            filas.add(new Object[]{c.getCodigo(), c.getNombre(), c.getTipo(), c.getCapacidad(),
+                    c.getEstado(), c.getHorarioTexto()});
+        }
+        tabla(new String[]{"Código", "Nombre", "Tipo", "Capacidad", "Estado", "Horario"}, filas);
+    }
+
+    /** Si el nuevo horario dejó horas sin tarifa, lo avisa (esas horas no se podrían reservar). */
+    private void avisarHuecosDeTarifa() {
+        for (String h : sistema.getTarifaController().getHuecosDeCobertura()) {
+            System.out.println("  [AVISO] Horario sin tarifa (no se podrá reservar): " + h);
+        }
+    }
+
+    // =====================================================================
+    //  8. TARIFAS: CRUD DE FRANJAS Y ESPECIALES
+    // =====================================================================
+
+    private void menuTarifas() {
+        TarifaController tc = sistema.getTarifaController();
+        while (true) {
+            subtitulo("TARIFAS (FRANJAS Y ESPECIALES)");
+            System.out.println("  1. Listar tarifas");
+            System.out.println("  2. Crear franja horaria" + admin());
+            System.out.println("  3. Modificar franja horaria" + admin());
+            System.out.println("  4. Crear tarifa especial (feriado / evento)" + admin());
+            System.out.println("  5. Modificar tarifa especial" + admin());
+            System.out.println("  6. Eliminar tarifa" + admin());
+            System.out.println("  7. Cotizar precio de cancha");
+            System.out.println("  8. Revisar horarios sin tarifa");
+            System.out.println("  0. Volver");
+            switch (leerOpcion(0, 8)) {
+                case 1: imprimirTarifas(tc.listar()); break;
+                case 2: accion(() -> {
+                    String nombre = leer("Nombre (ej. Lunes a viernes nocturno)");
+                    double precio = MonedaUtil.leer(leer("Precio por hora"));
+                    int prioridad = leerEntero("Prioridad (las normales usan 1)");
+                    Set<DayOfWeek> dias = leerDias(null);
+                    LocalTime desde = leerHora("Hora de inicio HH:mm");
+                    LocalTime hasta = leerHora("Hora de fin HH:mm (no incluida)");
+                    ok("Franja creada: " + tc.crearFranja(nombre, precio, prioridad, dias, desde, hasta));
+                    avisarHuecosDeTarifa();
+                }); break;
+                case 3: accion(() -> {
+                    Tarifa t = tc.obtener(leerCodigo("Código de la franja"));
+                    if (!(t instanceof TarifaFranja)) {
+                        error(t.getCodigo() + " es una tarifa especial; use la opción 5.");
+                        return;
+                    }
+                    TarifaFranja f = (TarifaFranja) t;
+                    System.out.println("  (Enter = conservar el valor actual)");
+                    String nombre = leerConDefecto("Nombre", f.getNombre());
+                    double precio = leerMontoConDefecto("Precio por hora", f.getPrecioHora());
+                    int prioridad = leerEnteroConDefecto("Prioridad", f.getPrioridad());
+                    Set<DayOfWeek> dias = leerDias(f.getDias());
+                    LocalTime desde = leerHoraConDefecto("Hora de inicio", f.getHoraInicio());
+                    LocalTime hasta = leerHoraConDefecto("Hora de fin", f.getHoraFin());
+                    ok("Actualizada: " + tc.actualizarFranja(f.getCodigo(), nombre, precio, prioridad, dias, desde, hasta));
+                    avisarHuecosDeTarifa();
+                }); break;
+                case 4: accion(() -> ok("Tarifa especial creada: " + tc.crearEspecial(leer("Nombre (ej. Navidad)"),
+                        MonedaUtil.leer(leer("Precio por hora")), leerEntero("Prioridad (ej. 10, mayor que las franjas)"),
+                        leerFecha("Fecha dd/MM/aaaa"), leer("Motivo")))); break;
+                case 5: accion(() -> {
+                    Tarifa t = tc.obtener(leerCodigo("Código de la tarifa especial"));
+                    if (!(t instanceof TarifaEspecial)) {
+                        error(t.getCodigo() + " es una franja horaria; use la opción 3.");
+                        return;
+                    }
+                    TarifaEspecial te = (TarifaEspecial) t;
+                    System.out.println("  (Enter = conservar el valor actual)");
+                    String nombre = leerConDefecto("Nombre", te.getNombre());
+                    double precio = leerMontoConDefecto("Precio por hora", te.getPrecioHora());
+                    int prioridad = leerEnteroConDefecto("Prioridad", te.getPrioridad());
+                    LocalDate fecha = leerFechaConDefecto("Fecha", te.getFecha());
+                    String motivo = leerConDefecto("Motivo", te.getMotivo());
+                    ok("Actualizada: " + tc.actualizarEspecial(te.getCodigo(), nombre, precio, prioridad, fecha, motivo));
+                }); break;
+                case 6: accion(() -> {
+                    Tarifa t = tc.obtener(leerCodigo("Código de la tarifa"));
+                    if (leerSiNo("¿Eliminar " + t + "? (las reservas ya hechas conservan su precio)")) {
+                        List<String> huecos = tc.eliminar(t.getCodigo());
+                        ok("Tarifa eliminada.");
+                        for (String h : huecos) {
+                            System.out.println("  [AVISO] Horario sin tarifa (no se podrá reservar): " + h);
+                        }
+                    }
+                }); break;
+                case 7: accion(() -> {
                     LocalDateTime inicio = LocalDateTime.of(leerFecha("Fecha dd/MM/aaaa"), leerHora("Hora HH:mm"));
                     int minutos = leerDuracion();
                     for (CalculadoraTarifa.Tramo t : tc.desglosar(inicio, inicio.plusMinutes(minutos))) {
@@ -752,27 +932,84 @@ public class CanchaProConsola {
                     }
                     ok("Total cancha: " + MonedaUtil.formatear(tc.cotizar(inicio, inicio.plusMinutes(minutos))));
                 }); break;
-                case 5: {
+                case 8: {
                     List<String> huecos = tc.getHuecosDeCobertura();
                     if (huecos.isEmpty()) {
-                        ok("Todos los horarios de apertura tienen tarifa.");
+                        ok("Todos los horarios de atención tienen tarifa.");
                     }
                     for (String h : huecos) {
                         System.out.println("  [AVISO] Sin tarifa: " + h);
                     }
                     break;
                 }
-                case 6: accion(() -> ok("Tarifa creada: " + tc.crearEspecial(leer("Nombre"),
-                        MonedaUtil.leer(leer("Precio por hora")), leerEntero("Prioridad (ej. 10)"),
-                        leerFecha("Fecha dd/MM/aaaa"), leer("Motivo")))); break;
-                case 7: listarServiciosActivos(); break;
+                default: return;
+            }
+        }
+    }
+
+    private void imprimirTarifas(List<Tarifa> tarifas) {
+        List<Object[]> filas = new ArrayList<>();
+        for (Tarifa t : tarifas) {
+            filas.add(new Object[]{t.getCodigo(), t.getTipoTarifa(), t.getNombre(),
+                    MonedaUtil.formatear(t.getPrecioHora()), t.getPrioridad(), t.getDescripcionAplicacion()});
+        }
+        tabla(new String[]{"Código", "Tipo", "Nombre", "Precio/h", "Prioridad", "Aplica"}, filas);
+    }
+
+    // =====================================================================
+    //  9. SERVICIOS ADICIONALES
+    // =====================================================================
+
+    private void menuServicios() {
+        ServicioController sc = sistema.getServicioController();
+        while (true) {
+            subtitulo("SERVICIOS ADICIONALES");
+            System.out.println("  1. Listar servicios (activos e inactivos)");
+            System.out.println("  2. Crear servicio" + admin());
+            System.out.println("  3. Modificar servicio" + admin());
+            System.out.println("  4. Activar / desactivar servicio" + admin());
+            System.out.println("  5. Eliminar servicio (solo si nunca se usó)" + admin());
+            System.out.println("  0. Volver");
+            switch (leerOpcion(0, 5)) {
+                case 1: {
+                    List<Object[]> filas = new ArrayList<>();
+                    for (ServicioAdicional s : sc.listar()) {
+                        filas.add(new Object[]{s.getCodigo(), s.getNombre(), MonedaUtil.formatear(s.getPrecio()),
+                                s.getModalidadTexto(), s.isActivo() ? "Activo" : "Inactivo"});
+                    }
+                    tabla(new String[]{"Código", "Servicio", "Precio", "Cobro", "Estado"}, filas);
+                    break;
+                }
+                case 2: accion(() -> ok("Servicio creado: " + sc.crear(leer("Nombre"),
+                        MonedaUtil.leer(leer("Precio")), leerSiNo("¿Se cobra por hora?")))); break;
+                case 3: accion(() -> {
+                    ServicioAdicional s = sc.obtener(leerCodigo("Código de servicio"));
+                    System.out.println("  (Enter = conservar el valor actual)");
+                    String nombre = leerConDefecto("Nombre", s.getNombre());
+                    double precio = leerMontoConDefecto("Precio", s.getPrecio());
+                    boolean porHora = leerSiNo("¿Se cobra por hora? (actual: " + s.getModalidadTexto() + ")");
+                    ok("Actualizado: " + sc.actualizar(s.getCodigo(), nombre, precio, porHora));
+                }); break;
+                case 4: accion(() -> {
+                    String codigo = leerCodigo("Código de servicio");
+                    boolean activo = leerSiNo("¿Dejarlo ACTIVO? (n = desactivar)");
+                    sc.cambiarEstado(codigo, activo);
+                    ok("Servicio " + codigo + (activo ? " activado." : " desactivado."));
+                }); break;
+                case 5: accion(() -> {
+                    ServicioAdicional s = sc.obtener(leerCodigo("Código de servicio"));
+                    if (leerSiNo("¿Eliminar " + s + "?")) {
+                        sc.eliminar(s.getCodigo());
+                        ok("Servicio eliminado.");
+                    }
+                }); break;
                 default: return;
             }
         }
     }
 
     // =====================================================================
-    //  8. USUARIOS
+    //  10. USUARIOS
     // =====================================================================
 
     private void menuUsuarios() {
@@ -787,8 +1024,9 @@ public class CanchaProConsola {
             System.out.println("  2. Crear usuario");
             System.out.println("  3. Activar / desactivar usuario");
             System.out.println("  4. Restablecer contraseña");
+            System.out.println("  5. Modificar usuario (nombre, teléfono, rol)");
             System.out.println("  0. Volver");
-            switch (leerOpcion(0, 4)) {
+            switch (leerOpcion(0, 5)) {
                 case 1: accion(() -> {
                     List<Object[]> filas = new ArrayList<>();
                     for (Usuario u : uc.listar()) {
@@ -816,6 +1054,14 @@ public class CanchaProConsola {
                             leer("Confirme la contraseña").toCharArray());
                     ok("Contraseña restablecida.");
                 }); break;
+                case 5: accion(() -> {
+                    Usuario u = uc.obtener(leerCodigo("Código de usuario"));
+                    System.out.println("  (Enter = conservar el valor actual)");
+                    String nombre = leerConDefecto("Nombre", u.getNombre());
+                    String tel = leerConDefecto("Teléfono", u.getTelefono());
+                    RolUsuario rol = elegirEnumConDefecto("Rol", uc.getRoles(), u.getRol());
+                    ok("Actualizado: " + uc.actualizar(u.getCodigo(), nombre, tel, rol).getDescripcion());
+                }); break;
                 default: return;
             }
         }
@@ -828,7 +1074,7 @@ public class CanchaProConsola {
     }
 
     // =====================================================================
-    //  9. CONFIGURACIÓN
+    //  11. CONFIGURACIÓN
     // =====================================================================
 
     private void menuConfiguracion() {
@@ -1015,6 +1261,123 @@ public class CanchaProConsola {
                 error("Formato inválido. Use MM/aaaa, por ejemplo 10/2026.");
             }
         }
+    }
+
+    /** Marca las opciones que solo puede usar el administrador (el controlador lo exige). */
+    private String admin() {
+        return sistema.getSesion().esAdministrador() ? "" : "  [solo administrador]";
+    }
+
+    private int leerEnteroConDefecto(String prompt, int actual) {
+        while (true) {
+            String texto = leerConDefecto(prompt, String.valueOf(actual));
+            try {
+                return Validador.leerEntero(texto, prompt);
+            } catch (CanchaProException e) {
+                error(e.getMessage());
+            }
+        }
+    }
+
+    private double leerMontoConDefecto(String prompt, double actual) {
+        while (true) {
+            String texto = leerConDefecto(prompt, MonedaUtil.aCsv(actual));
+            try {
+                return MonedaUtil.leer(texto);
+            } catch (CanchaProException e) {
+                error(e.getMessage());
+            }
+        }
+    }
+
+    private LocalTime leerHoraConDefecto(String prompt, LocalTime actual) {
+        while (true) {
+            String texto = leerConDefecto(prompt + " HH:mm", FechaUtil.formatearHora(actual));
+            try {
+                return FechaUtil.leerHora(texto);
+            } catch (CanchaProException e) {
+                error(e.getMessage());
+            }
+        }
+    }
+
+    private LocalDate leerFechaConDefecto(String prompt, LocalDate actual) {
+        while (true) {
+            String texto = leerConDefecto(prompt + " dd/MM/aaaa", FechaUtil.formatearFecha(actual));
+            try {
+                return FechaUtil.leerFecha(texto);
+            } catch (CanchaProException e) {
+                error(e.getMessage());
+            }
+        }
+    }
+
+    /** Igual que elegirEnum, pero Enter conserva el valor actual. */
+    private <T> T elegirEnumConDefecto(String prompt, T[] valores, T actual) {
+        T elegido = elegirEnum(prompt + " (Enter = " + actual + ")", valores, true);
+        return elegido == null ? actual : elegido;
+    }
+
+    /**
+     * Lee los días de una franja. Acepta:
+     * "lv" (lunes a viernes), "fds" (sábado y domingo), "todos",
+     * letras "L,M,X,J,V,S,D" o números "1-5" / "1,3,5" (1 = lunes).
+     *
+     * @param actuales días actuales (Enter los conserva) o null si es obligatorio
+     */
+    private Set<DayOfWeek> leerDias(Set<DayOfWeek> actuales) {
+        String ayuda = "Días (lv = lun-vie, fds = sáb-dom, todos, L,M,X,J,V,S,D o 1-5)";
+        while (true) {
+            String texto = actuales == null ? leer(ayuda) : leerConDefecto(ayuda, textoDias(actuales));
+            Set<DayOfWeek> dias = interpretarDias(texto);
+            if (dias != null && !dias.isEmpty()) {
+                return dias;
+            }
+            error("No se reconocieron los días. Ejemplos: lv, fds, todos, L,M,X o 1-5.");
+        }
+    }
+
+    private static Set<DayOfWeek> interpretarDias(String texto) {
+        String t = texto.trim().toUpperCase().replace(" ", "");
+        switch (t) {
+            case "LV": return EnumSet.range(DayOfWeek.MONDAY, DayOfWeek.FRIDAY);
+            case "FDS": return EnumSet.of(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY);
+            case "TODOS": return EnumSet.allOf(DayOfWeek.class);
+            default: break;
+        }
+        Set<DayOfWeek> dias = EnumSet.noneOf(DayOfWeek.class);
+        String letras = "LMXJVSD";
+        for (String parte : t.split(",")) {
+            if (parte.isEmpty()) {
+                continue;
+            }
+            if (parte.matches("[1-7]-[1-7]")) {
+                int a = parte.charAt(0) - '0';
+                int b = parte.charAt(2) - '0';
+                for (int i = Math.min(a, b); i <= Math.max(a, b); i++) {
+                    dias.add(DayOfWeek.of(i));
+                }
+            } else if (parte.matches("[1-7]")) {
+                dias.add(DayOfWeek.of(Integer.parseInt(parte)));
+            } else if (parte.length() == 1 && letras.contains(parte)) {
+                dias.add(DayOfWeek.of(letras.indexOf(parte) + 1));
+            } else {
+                return null;
+            }
+        }
+        return dias;
+    }
+
+    private static String textoDias(Set<DayOfWeek> dias) {
+        String letras = "LMXJVSD";
+        StringBuilder sb = new StringBuilder();
+        for (DayOfWeek d : dias) {
+            if (sb.length() > 0) {
+                sb.append(',');
+            }
+            sb.append(letras.charAt(d.getValue() - 1));
+        }
+        return sb.toString();
     }
 
     /** Muestra los valores de un enum numerados y devuelve el elegido (o null si se permite vacío). */
