@@ -36,7 +36,9 @@ public class SistemaController {
     private final GestorPersistencia gestor;
     private ComplejoDeportivo complejo;
     private LoginController loginController;
- 
+    /** Panel oculto Ctrl+Shift+D: existe desde el arranque, no depende de la sesión. */
+    private DesarrolladorController desarrolladorController;
+    
     // Controladores de la sesión activa (null mientras nadie haya iniciado sesión)
     private Sesion sesion;
     private ClienteController clienteController;
@@ -82,6 +84,8 @@ public class SistemaController {
     public ResultadoCarga iniciar() {
         complejo = gestor.cargarTodo();
         loginController = new LoginController(complejo);
+        desarrolladorController = new DesarrolladorController(complejo, gestor,
+                () -> restauracionPendiente = true);
         restauracionPendiente = false;
         return gestor.getUltimoResultado();
     }
@@ -94,7 +98,11 @@ public class SistemaController {
         exigirIniciado();
         return loginController;
     }
- 
+     /** Panel del desarrollador (protegido por su propia clave, no por la sesión). */
+    public DesarrolladorController getDesarrolladorController() {
+        exigirIniciado();
+        return desarrolladorController;
+    }
     public String getNombreComplejo() {
         exigirIniciado();
         return complejo.getNombre();
@@ -174,12 +182,12 @@ public class SistemaController {
      * @throws CanchaProException si no se pudo escribir (la vista debe preguntar
      *                            si de todas formas desea salir)
      */
-    public String cerrar() throws CanchaProException {
+       public String cerrar() throws CanchaProException {
         if (!estaIniciado()) {
             return "El sistema no se había iniciado; no hay nada que guardar.";
         }
         if (restauracionPendiente) {
-            return "Se restauraron los datos de prueba; se cargarán al volver a abrir el programa.";
+            return "Se restauraron archivos (datos de prueba o respaldo); se cargarán al volver a abrir el programa.";
         }
         try {
             int registros = gestor.guardarTodo(complejo);
