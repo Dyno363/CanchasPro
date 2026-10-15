@@ -53,7 +53,7 @@ public class SistemaController {
     private PosController posController;
     private ConfiguracionController configuracionController;
     private ReporteController reporteController;
- 
+    private IndicadoresController indicadoresController;
     /** true después de restaurar datos de prueba: al cerrar NO se debe guardar la memoria vieja. */
     private boolean restauracionPendiente;
  
@@ -143,6 +143,7 @@ public class SistemaController {
         posController = null;
         configuracionController = null;
         reporteController = null;
+        indicadoresController = null;
     }
  
     public boolean haySesion() {
@@ -167,6 +168,7 @@ public class SistemaController {
         posController = new PosController(complejo, sesion);
         configuracionController = new ConfiguracionController(complejo, sesion, gestor);
         reporteController = new ReporteController(complejo);
+        indicadoresController = new IndicadoresController(reservaController, pagoController, mapaController);
     }
  
     // =====================================================================
@@ -291,6 +293,10 @@ public class SistemaController {
     public ReporteController getReporteController() {
         exigirSesion();
         return reporteController;
+    }
+        public IndicadoresController getIndicadoresController() {
+        exigirSesion();
+        return indicadoresController;
     }
  
     // =====================================================================

@@ -103,18 +103,10 @@ public class LoginView extends javax.swing.JFrame {
         }
     }
 
-    /**
-     * TEMPORAL confirma el ingreso y vuelve al login.
-     *  se reemplaza por: new DashboardView(sistema).setVisible(true); dispose();
-     */
+      /** Abre la ventana principal y cierra el login (la sesión ya está iniciada). */
     private void abrirDashboard(Sesion sesion) {
-        JOptionPane.showMessageDialog(this, "Bienvenido, " + sesion.getUsuario().getNombre()
-                + " (" + sesion.getRol() + ").\nEl Bienvenido, aqui va el Dashboard",
-                "Sesión iniciada", JOptionPane.INFORMATION_MESSAGE);
-        sistema.cerrarSesion();
-        txtUsuario.setText("");
-        limpiarMensaje();
-        txtUsuario.requestFocusInWindow();
+        new DashboardView(sistema).setVisible(true);
+        dispose();
     }
 
     /** Cerrar la ventana = cerrar el programa: aquí se guardan los CSV. */
