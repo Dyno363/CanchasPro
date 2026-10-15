@@ -1,0 +1,4 @@
+codigo;tipoTarifa;nombre;precioHora;prioridad;dias;horaInicio;horaFin;fecha;motivo
+T01;FRANJA;Lunes a viernes diurno;100.00;1;MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY;08:00;17:00;;
+T02;FRANJA;Lunes a viernes nocturno;225.00;1;MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY;17:00;23:00;;
+T03;FRANJA;Fin de semana;250.00;1;SATURDAY|SUNDAY;08:00;23:00;;
