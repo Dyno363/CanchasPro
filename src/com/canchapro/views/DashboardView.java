@@ -37,6 +37,7 @@ import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import com.canchapro.views.dialogs.DesarrolladorDialog;
+import com.canchapro.views.panels.MapaCanchasPanel;
 /**
  * Ventana principal de CanchaPro (VISTA).
  *
@@ -57,6 +58,7 @@ public class DashboardView extends javax.swing.JFrame {
     private final Map<ModuloMenu, JPanel> modulos = new EnumMap<>(ModuloMenu.class);
     private Timer refresco;
     private ReservasPanel reservasPanel;
+        private MapaCanchasPanel mapaPanel;
     // Tarjetas de la pestaña Reservas
     private TarjetaIndicador tarReservasHoy;
     private TarjetaIndicador tarEnCurso;
@@ -86,6 +88,7 @@ public class DashboardView extends javax.swing.JFrame {
         iniciarRefresco();
         setTitle("CanchaPro - " + sistema.getNombreComplejo());
         setLocationRelativeTo(null);
+        setExtendedState(MAXIMIZED_BOTH); // abre ocupando toda la pantalla
     }
 
     // =====================================================================
@@ -99,39 +102,51 @@ public class DashboardView extends javax.swing.JFrame {
         getContentPane().add(menu, BorderLayout.WEST);
     }
 
-    /** Pone las tarjetas arriba de cada pestaña y un contenido provisional debajo. */
+    /** Pone las tarjetas arriba de cada pestaña; debajo, la lista de reservas y el mapa. */
     private void construirPestanas() {
         // Por si en el diseñador quedaron en "Free Design": las pestañas necesitan BorderLayout
         pnlTabReservas.setLayout(new BorderLayout());
         pnlTabMapa.setLayout(new BorderLayout());
 
+        // ---- Pestaña 1: Reservas
         tarReservasHoy = new TarjetaIndicador("Reservas hoy", ColorTema.INFO);
         tarEnCurso = new TarjetaIndicador("En curso", ColorTema.CANCHA_EN_CURSO);
         tarCobrado = new TarjetaIndicador("Cobrado hoy", ColorTema.EXITO);
         tarSaldo = new TarjetaIndicador("Saldo pendiente", ColorTema.ERROR);
         pnlTabReservas.add(filaDeTarjetas(tarReservasHoy, tarEnCurso, tarCobrado, tarSaldo), BorderLayout.NORTH);
-        reservasPanel = new ReservasPanel(sistema, this::actualizarIndicadores);
+        reservasPanel = new ReservasPanel(sistema, this::alCambiarReservas);
         pnlTabReservas.add(reservasPanel, BorderLayout.CENTER);
 
+        // ---- Pestaña 2: Mapa de canchas
         tarDisponibles = new TarjetaIndicador("Disponibles", ColorTema.CANCHA_DISPONIBLE);
         tarCanchasEnCurso = new TarjetaIndicador("En curso", ColorTema.CANCHA_EN_CURSO);
         tarMantenimiento = new TarjetaIndicador("Mantenimiento", ColorTema.CANCHA_MANTENIMIENTO);
         pnlTabMapa.add(filaDeTarjetas(tarDisponibles, tarCanchasEnCurso, tarMantenimiento), BorderLayout.NORTH);
-        pnlTabMapa.add(provisional("Mapa de canchas",
-                "Aquí se dibujará una tarjeta por cancha con su color de estado."), BorderLayout.CENTER);
+        mapaPanel = new MapaCanchasPanel(sistema, this::alCambiarDesdeMapa);
+        pnlTabMapa.add(mapaPanel, BorderLayout.CENTER);
     }
 
-    /** Crea una "carta" provisional por cada módulo del menú. */
+    /** Una reserva cambió en la pestaña 1: el mapa y los números se ponen al día. */
+    private void alCambiarReservas() {
+        actualizarIndicadores();
+        mapaPanel.recargar();
+    }
+
+    /** Algo cambió desde el mapa (refresco o POS): la lista y los números se ponen al día. */
+    private void alCambiarDesdeMapa() {
+        actualizarIndicadores();
+        reservasPanel.recargar();
+    }
+        /** Crea una "carta" provisional por cada módulo del menú (se reemplazan en la Fase 7). */
     private void construirModulos() {
         for (ModuloMenu modulo : ModuloMenu.values()) {
             if (modulo.getGrupo() != null && modulo != ModuloMenu.GUARDAR) {
-                JPanel panel = provisional(modulo.getTexto(), modulo.getAyuda() + ". Se implementa despues.");
+                JPanel panel = provisional(modulo.getTexto(), modulo.getAyuda() + ". Se implementa después.");
                 modulos.put(modulo, panel);
                 pnlContenido.add(panel, modulo.name());
             }
         }
     }
-
     private JPanel filaDeTarjetas(TarjetaIndicador... tarjetas) {
         JPanel fila = new JPanel(new FlowLayout(FlowLayout.LEFT, Tema.MARGEN, Tema.MARGEN));
         fila.setOpaque(false);
@@ -229,16 +244,16 @@ public class DashboardView extends javax.swing.JFrame {
         tarMantenimiento.setDetalle(c.getInactivas() + " inactivas");
     }
 
-    /** Cada minuto: pone las reservas al día según la hora y repinta los números. */
+     /** Cada minuto: pone las reservas al día según la hora y repinta los números y el mapa. */
     private void iniciarRefresco() {
         refresco = new Timer(MapaController.INTERVALO_REFRESCO_MS, e -> {
             sistema.getMapaController().refrescar();
             actualizarIndicadores();
             reservasPanel.recargar(); // los estados pudieron cambiar con la hora
+            mapaPanel.recargar();     // colores y "quedan X min"
         });
         refresco.start();
     }
-
     // =====================================================================
     //  ACCIONES DEL MENÚ
     // =====================================================================
@@ -368,7 +383,6 @@ public class DashboardView extends javax.swing.JFrame {
 
         setDefaultCloseOperation(javax.swing.WindowConstants.DO_NOTHING_ON_CLOSE);
         setPreferredSize(new java.awt.Dimension(1100, 700));
-        setResizable(false);
         setSize(new java.awt.Dimension(1100, 700));
         addWindowListener(new java.awt.event.WindowAdapter() {
             public void windowClosing(java.awt.event.WindowEvent evt) {

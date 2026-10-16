@@ -16,6 +16,7 @@ import com.canchapro.models.reservas.ServicioAdicional;
 import com.canchapro.utils.FechaUtil;
 import com.canchapro.utils.GeneradorCodigo;
 import com.canchapro.utils.Validador;
+import com.canchapro.utils.MonedaUtil;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -142,6 +143,51 @@ public class ReservaController {
     public double cotizarCancha(LocalDateTime inicio, int duracionMinutos) throws CanchaProException {
         validarDuracion(duracionMinutos);
         return complejo.getCalculadoraTarifa().calcularPrecioCancha(inicio, inicio.plusMinutes(duracionMinutos));
+    }
+    /**
+     * VISTA PREVIA del precio (cancha + servicios) SIN crear la reserva.
+     * La usa "Nueva reserva" para mostrar el total mientras el operador elige.
+     *
+     * @param servicios código de servicio → cantidad (puede ser null o vacío)
+     */
+    public Cotizacion cotizar(LocalDateTime inicio, int duracionMinutos, Map<String, Integer> servicios)
+            throws CanchaProException {
+        if (inicio == null) {
+            throw new DatoInvalidoException("La fecha y la hora de inicio son obligatorias.");
+        }
+        double cancha = cotizarCancha(inicio, duracionMinutos);
+        double horas = duracionMinutos / 60.0;
+        double extras = 0;
+        if (servicios != null) {
+            for (Map.Entry<String, Integer> e : servicios.entrySet()) {
+                Validador.validarEnteroPositivo(e.getValue(), "cantidad");
+                extras += obtenerServicioActivo(e.getKey()).calcularCosto(e.getValue(), horas);
+            }
+        }
+        return new Cotizacion(cancha, MonedaUtil.redondear(extras));
+    }
+
+    /** Resultado de {@link #cotizar}: precio de la cancha, de los servicios y total. */
+    public static final class Cotizacion {
+        private final double cancha;
+        private final double servicios;
+
+        private Cotizacion(double cancha, double servicios) {
+            this.cancha = cancha;
+            this.servicios = servicios;
+        }
+
+        public double getCancha() {
+            return cancha;
+        }
+
+        public double getServicios() {
+            return servicios;
+        }
+
+        public double getTotal() {
+            return MonedaUtil.redondear(cancha + servicios);
+        }
     }
 
     // =====================================================================

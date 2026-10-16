@@ -16,6 +16,12 @@ import java.time.LocalDate;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
+import com.canchapro.utils.MonedaUtil;
+import com.canchapro.views.dialogs.NuevaReservaDialog;
+import com.canchapro.views.dialogs.PagoDialog;
+import com.canchapro.views.dialogs.CancelacionDialog;
+import com.canchapro.views.dialogs.DetalleReservaDialog;
+        
 /**
  *
  * @author SANTANA
@@ -231,26 +237,71 @@ public class ReservasPanel extends javax.swing.JPanel {
         }
     }
 
-    /** TEMPORAL hasta la 6.4: se reemplaza por el NuevaReservaDialog. */
+    /** Abre la ventana de Nueva reserva; si se creó, la muestra seleccionada en la tabla. */
     private void nuevaReserva() {
-        pendiente("La ventana para crear reservas se agrega en la entrega 6.4.");
+        NuevaReservaDialog dlg = new NuevaReservaDialog(this, sistema);
+        dlg.setVisible(true); // modal: espera hasta que se cierre
+        Reserva nueva = dlg.getReservaCreada();
+        if (nueva == null) {
+            return; // canceló
+        }
+        // Ir a la fecha de la nueva reserva para que se vea en la tabla
+        chkTodasFechas.setSelected(false);
+        txtFecha.setText(FechaUtil.formatearFecha(nueva.getInicio().toLocalDate()));
+        cmbEstado.setSelectedIndex(0);
+        txtBuscar.setText("");
+        aplicarFiltros();
+        seleccionar(nueva.getCodigo());
+        alCambiarDatos.run();
+        JOptionPane.showMessageDialog(this, "Reserva " + nueva.getCodigo() + " creada para "
+                + nueva.getCliente().getNombre() + ".\nEstado: Pendiente. Total: "
+                + MonedaUtil.formatear(nueva.calcularTotal()), "Reservas", JOptionPane.INFORMATION_MESSAGE);
     }
 
-    /** TEMPORAL hasta la 6.5: se reemplaza por el PagoDialog. */
+   /** Abre la ventana de pagos de la reserva seleccionada. */
     private void registrarPago() {
-        pendiente("La ventana de pagos se agrega en la entrega 6.5.");
+        Reserva r = seleccionada();
+        if (r == null) {
+            return;
+        }
+        try {
+            PagoDialog dlg = new PagoDialog(this, sistema, r.getCodigo());
+            dlg.setVisible(true); // modal: espera hasta que se cierre
+            if (dlg.huboCambios()) {
+                recargar();
+                alCambiarDatos.run(); // "Cobrado hoy" y "Saldo pendiente" cambian
+            }
+        } catch (CanchaProException ex) {
+            error(ex);
+        }
     }
 
-    /** TEMPORAL hasta la 6.6: se reemplaza por el CancelacionDialog. */
+    /** Abre la ventana de cancelación (motivo obligatorio) de la reserva seleccionada. */
     private void cancelar() {
-        pendiente("La ventana de cancelación (con motivo) se agrega en la entrega 6.6.");
+        Reserva r = seleccionada();
+        if (r == null) {
+            return;
+        }
+        try {
+            CancelacionDialog dlg = new CancelacionDialog(this, sistema, r.getCodigo());
+            dlg.setVisible(true); // modal: espera hasta que se cierre
+            if (dlg.seCancelo()) {
+                despuesDeCambiar("Reserva " + r.getCodigo() + " cancelada. El horario quedó libre.");
+            }
+        } catch (CanchaProException ex) {
+            error(ex);
+        }
     }
-
-    /** TEMPORAL hasta la 6.7: se reemplaza por el DetalleReservaDialog. */
+    /** Abre la ficha completa (solo lectura) de la reserva seleccionada. */
     private void verDetalle() {
         Reserva r = seleccionada();
-        if (r != null) {
-            pendiente("Reserva " + r.getCodigo() + ". El detalle completo se agrega en la entrega 6.7.");
+        if (r == null) {
+            return;
+        }
+        try {
+            new DetalleReservaDialog(this, sistema, r.getCodigo()).setVisible(true);
+        } catch (CanchaProException ex) {
+            error(ex);
         }
     }
 

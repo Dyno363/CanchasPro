@@ -1,5 +1,0 @@
-codigo;tipoTarifa;nombre;precioHora;prioridad;dias;horaInicio;horaFin;fecha;motivo
-T01;FRANJA;Lunes a viernes diurno;150.00;1;MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY;08:00;17:00;;
-T02;FRANJA;Lunes a viernes nocturno;225.00;1;MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY;17:00;23:00;;
-T03;FRANJA;Fin de semana;250.00;1;SATURDAY|SUNDAY;08:00;23:00;;
-T04;ESPECIAL;Día de Todos los Santos;275.00;10;;;;2026-11-01;Feriado nacional
