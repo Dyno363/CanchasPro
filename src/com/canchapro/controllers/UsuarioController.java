@@ -76,7 +76,10 @@ public class UsuarioController {
     public RolUsuario[] getRoles() {
         return RolUsuario.values();
     }
-
+        /** @return true si ese código es el del usuario que tiene la sesión abierta (para marcar "tú") */
+    public boolean esUsuarioActual(String codigo) {
+        return sesion.getUsuario().getCodigo().equals(codigo);
+    }
     // =====================================================================
     //  OPERACIONES DEL ADMINISTRADOR
     // =====================================================================

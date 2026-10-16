@@ -38,6 +38,12 @@ import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import com.canchapro.views.dialogs.DesarrolladorDialog;
 import com.canchapro.views.panels.MapaCanchasPanel;
+import com.canchapro.views.panels.ClientesPanel;
+import com.canchapro.views.panels.PanelModulo;
+import com.canchapro.views.panels.UsuariosPanel;
+import com.canchapro.views.panels.CanchasPanel;
+import com.canchapro.views.panels.ServiciosPanel;
+import com.canchapro.views.panels.TarifasPanel;
 /**
  * Ventana principal de CanchaPro (VISTA).
  *
@@ -137,15 +143,49 @@ public class DashboardView extends javax.swing.JFrame {
         actualizarIndicadores();
         reservasPanel.recargar();
     }
-        /** Crea una "carta" provisional por cada módulo del menú (se reemplazan en la Fase 7). */
+    /** Crea una "carta" por cada módulo del menú. */
     private void construirModulos() {
         for (ModuloMenu modulo : ModuloMenu.values()) {
             if (modulo.getGrupo() != null && modulo != ModuloMenu.GUARDAR) {
-                JPanel panel = provisional(modulo.getTexto(), modulo.getAyuda() + ". Se implementa después.");
+                JPanel panel = crearPanelDe(modulo);
                 modulos.put(modulo, panel);
                 pnlContenido.add(panel, modulo.name());
             }
+            
         }
+    }
+
+    /**
+     * La pantalla real de cada módulo. Los que todavía no existen muestran
+     * una carta provisional; cada entrega de la Fase 7/8 agrega su "case".
+     */
+      private JPanel crearPanelDe(ModuloMenu modulo) {
+        switch (modulo) {
+            case CLIENTES:
+                return new ClientesPanel(sistema, this::alCambiarClientes);
+            case USUARIOS:
+                return new UsuariosPanel(sistema);
+            case CANCHAS:
+                return new CanchasPanel(sistema, this::alCambiarCanchas);
+            case TARIFAS:
+                return new TarifasPanel(sistema);
+            case SERVICIOS:
+                return new ServiciosPanel(sistema);   
+            default:
+                return provisional(modulo.getTexto(), modulo.getAyuda() + ". Se implementa después.");
+        }
+    }
+
+    /** Se editó un cliente: su nombre nuevo debe verse en la lista de reservas y en el mapa. */
+    private void alCambiarClientes() {
+        reservasPanel.recargar();
+        mapaPanel.recargar();
+    }
+        /** Cambió una cancha (estado, nombre, horario): el mapa y las tarjetas se ponen al día. */
+    private void alCambiarCanchas() {
+        actualizarIndicadores();
+        mapaPanel.recargar();
+        reservasPanel.recargar();
     }
     private JPanel filaDeTarjetas(TarjetaIndicador... tarjetas) {
         JPanel fila = new JPanel(new FlowLayout(FlowLayout.LEFT, Tema.MARGEN, Tema.MARGEN));
@@ -204,7 +244,11 @@ public class DashboardView extends javax.swing.JFrame {
         actualizarIndicadores();
     }
 
-    private void mostrarModulo(ModuloMenu modulo) {
+        private void mostrarModulo(ModuloMenu modulo) {
+        JPanel panel = modulos.get(modulo);
+        if (panel instanceof PanelModulo) {
+            ((PanelModulo) panel).recargar(); // datos frescos cada vez que se abre
+        }
         ((CardLayout) pnlContenido.getLayout()).show(pnlContenido, modulo.name());
         menu.setSeleccionado(modulo);
     }
@@ -359,10 +403,12 @@ public class DashboardView extends javax.swing.JFrame {
         pnlTabReservas.setBackground(Tema.color(ColorTema.FONDO));
         pnlTabMapa.setBackground(Tema.color(ColorTema.FONDO));
         menu.aplicarTema();
-         reservasPanel.aplicarTema();
-        for (TarjetaIndicador t : new TarjetaIndicador[]{tarReservasHoy, tarEnCurso, tarCobrado, tarSaldo,
-            tarDisponibles, tarCanchasEnCurso, tarMantenimiento}) {
-            t.aplicarTema();
+        reservasPanel.aplicarTema();
+        mapaPanel.aplicarTema();
+        for (JPanel panel : modulos.values()) {
+            if (panel instanceof PanelModulo) {
+                ((PanelModulo) panel).aplicarTema();
+            }
         }
         repaint();
     }

@@ -15,6 +15,9 @@ import com.canchapro.utils.Validador;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import com.canchapro.models.enums.EstadoReserva;
+import com.canchapro.utils.MonedaUtil;
+import java.time.LocalDateTime;
 /**
  *
  * @author SANTANA
@@ -77,7 +80,43 @@ public class ClienteController {
     public List<Reserva> getHistorial(String codigoCliente) throws EntidadNoEncontradaException {
         return complejo.getReservasDeCliente(obtener(codigoCliente));
     }
- 
+  /**
+     * Números del cliente para su ficha (pantalla Clientes). Se calculan aquí,
+     * no en la vista, para que la ventana solo muestre resultados.
+     *
+     * @throws EntidadNoEncontradaException si el código no existe
+     */
+    public ResumenCliente getResumen(String codigoCliente) throws EntidadNoEncontradaException {
+        int total = 0;
+        int activas = 0;
+        int canceladas = 0;
+        double pagado = 0;
+        double saldo = 0;
+        LocalDateTime ultima = null;
+        for (Reserva r : getHistorial(codigoCliente)) {
+            total++;
+            pagado += r.calcularTotalPagado();
+            if (r.getEstado() == EstadoReserva.CANCELADA) {
+                canceladas++;
+                continue; // una cancelada no es deuda
+            }
+            if (!r.getEstado().esTerminal()) {
+                activas++;
+            }
+            saldo += r.calcularSaldo();
+            if (ultima == null || r.getInicio().isAfter(ultima)) {
+                ultima = r.getInicio();
+            }
+        }
+        return new ResumenCliente(total, activas, canceladas, MonedaUtil.redondear(pagado),
+                MonedaUtil.redondear(saldo), ultima);
+    }
+
+    /** Solo el administrador ve habilitado el botón Eliminar. */
+    public boolean puedeEliminar() {
+        return sesion.esAdministrador();
+    }
+    
     /** @return el código que recibirá el próximo cliente (para mostrarlo en el formulario) */
     public String getSiguienteCodigo() {
         return complejo.generarCodigo(GeneradorCodigo.Tipo.CLIENTE);
@@ -165,6 +204,63 @@ public class ClienteController {
         if (otro.isPresent() && !otro.get().equals(actual)) {
             throw new DatoInvalidoException("Ya existe un cliente con el teléfono "
                     + otro.get().getTelefono() + ": " + otro.get() + ".");
+        }
+    }
+      // =====================================================================
+    //  CLASE ANIDADA: resumen para la ficha del cliente
+    // =====================================================================
+
+    /** Datos ya calculados que la pantalla Clientes muestra en la ficha. Inmutable. */
+    public static final class ResumenCliente {
+
+        private final int reservas;
+        private final int activas;
+        private final int canceladas;
+        private final double totalPagado;
+        private final double saldoPendiente;
+        private final LocalDateTime ultimaReserva;
+
+        private ResumenCliente(int reservas, int activas, int canceladas, double totalPagado,
+                               double saldoPendiente, LocalDateTime ultimaReserva) {
+            this.reservas = reservas;
+            this.activas = activas;
+            this.canceladas = canceladas;
+            this.totalPagado = totalPagado;
+            this.saldoPendiente = saldoPendiente;
+            this.ultimaReserva = ultimaReserva;
+        }
+
+        /** Total de reservas en el historial (incluye canceladas). */
+        public int getReservas() {
+            return reservas;
+        }
+
+        /** Reservas que todavía no terminan (pendiente, confirmada o en curso). */
+        public int getActivas() {
+            return activas;
+        }
+
+        public int getCanceladas() {
+            return canceladas;
+        }
+
+        /** Suma de todo lo que el cliente ha pagado. */
+        public double getTotalPagado() {
+            return totalPagado;
+        }
+
+        /** Lo que aún debe en reservas no canceladas. */
+        public double getSaldoPendiente() {
+            return saldoPendiente;
+        }
+
+        public boolean tieneSaldo() {
+            return !MonedaUtil.esCero(saldoPendiente);
+        }
+
+        /** @return inicio de su reserva más reciente (no cancelada), o null si no tiene */
+        public LocalDateTime getUltimaReserva() {
+            return ultimaReserva;
         }
     }
 }
