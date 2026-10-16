@@ -35,6 +35,7 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import com.canchapro.views.dialogs.DesarrolladorDialog;
 /**
  * Ventana principal de CanchaPro (VISTA).
  *
@@ -306,10 +307,19 @@ public class DashboardView extends javax.swing.JFrame {
     }
 
     
+        /**
+     * Abre el panel del desarrollador. Es MODAL: esta línea espera hasta que se
+     * cierre, y después se aplican los cambios (colores, módulo Tienda, datos).
+     */
     private void abrirPanelDesarrollador() {
-        JOptionPane.showMessageDialog(this, "Atajo Ctrl + Shift + D detectado.\n"
-                + "El panel del desarrollador",
-                "Panel del desarrollador", JOptionPane.INFORMATION_MESSAGE);
+        DesarrolladorController dev = sistema.getDesarrolladorController();
+        if (dev.isBloqueado()) {
+            JOptionPane.showMessageDialog(this, "Acceso de desarrollador bloqueado. Reinicie el programa.",
+                    "Panel del desarrollador", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        new DesarrolladorDialog(this, dev).setVisible(true);
+        aplicarCambiosDelDesarrollador();
     }
 
     /** Después de cerrar el panel del desarrollador: aplica colores y módulos nuevos. */

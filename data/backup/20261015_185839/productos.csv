@@ -1,7 +1,7 @@
 codigo;nombre;categoria;precio;existencia;stockMinimo;estado
-P001;Agua pura 600 ml;BEBIDA;5.00;31;12;ACTIVO
+P001;Agua pura 600 ml;BEBIDA;5.00;44;12;ACTIVO
 P002;Bebida hidratante 600 ml;BEBIDA;10.00;22;10;ACTIVO
 P003;Gaseosa lata 355 ml;BEBIDA;8.00;30;12;ACTIVO
 P004;Papas fritas bolsa;SNACK;5.00;18;10;ACTIVO
-P005;Chocolate barra;GOLOSINA;4.00;100;8;ACTIVO
+P005;Chocolate barra;GOLOSINA;4.00;6;8;ACTIVO
 P006;Hot dog;COMIDA_PREPARADA;15.00;15;5;ACTIVO
