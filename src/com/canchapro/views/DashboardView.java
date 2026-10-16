@@ -3,6 +3,7 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/GUIForms/JFrame.java to edit this template
  */
 package com.canchapro.views;
+import com.canchapro.views.panels.ReservasPanel;
 import com.canchapro.controllers.DesarrolladorController;
 import com.canchapro.controllers.IndicadoresController;
 import com.canchapro.controllers.MapaController;
@@ -55,7 +56,7 @@ public class DashboardView extends javax.swing.JFrame {
     private MenuLateral menu;
     private final Map<ModuloMenu, JPanel> modulos = new EnumMap<>(ModuloMenu.class);
     private Timer refresco;
-
+    private ReservasPanel reservasPanel;
     // Tarjetas de la pestaña Reservas
     private TarjetaIndicador tarReservasHoy;
     private TarjetaIndicador tarEnCurso;
@@ -109,8 +110,8 @@ public class DashboardView extends javax.swing.JFrame {
         tarCobrado = new TarjetaIndicador("Cobrado hoy", ColorTema.EXITO);
         tarSaldo = new TarjetaIndicador("Saldo pendiente", ColorTema.ERROR);
         pnlTabReservas.add(filaDeTarjetas(tarReservasHoy, tarEnCurso, tarCobrado, tarSaldo), BorderLayout.NORTH);
-        pnlTabReservas.add(provisional("Lista de reservas",
-                "Aquí irán los filtros, la búsqueda y la tabla de reservas"), BorderLayout.CENTER);
+        reservasPanel = new ReservasPanel(sistema, this::actualizarIndicadores);
+        pnlTabReservas.add(reservasPanel, BorderLayout.CENTER);
 
         tarDisponibles = new TarjetaIndicador("Disponibles", ColorTema.CANCHA_DISPONIBLE);
         tarCanchasEnCurso = new TarjetaIndicador("En curso", ColorTema.CANCHA_EN_CURSO);
@@ -233,6 +234,7 @@ public class DashboardView extends javax.swing.JFrame {
         refresco = new Timer(MapaController.INTERVALO_REFRESCO_MS, e -> {
             sistema.getMapaController().refrescar();
             actualizarIndicadores();
+            reservasPanel.recargar(); // los estados pudieron cambiar con la hora
         });
         refresco.start();
     }
@@ -342,6 +344,7 @@ public class DashboardView extends javax.swing.JFrame {
         pnlTabReservas.setBackground(Tema.color(ColorTema.FONDO));
         pnlTabMapa.setBackground(Tema.color(ColorTema.FONDO));
         menu.aplicarTema();
+         reservasPanel.aplicarTema();
         for (TarjetaIndicador t : new TarjetaIndicador[]{tarReservasHoy, tarEnCurso, tarCobrado, tarSaldo,
             tarDisponibles, tarCanchasEnCurso, tarMantenimiento}) {
             t.aplicarTema();
