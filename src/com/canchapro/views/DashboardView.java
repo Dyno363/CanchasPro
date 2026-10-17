@@ -44,6 +44,8 @@ import com.canchapro.views.panels.UsuariosPanel;
 import com.canchapro.views.panels.CanchasPanel;
 import com.canchapro.views.panels.ServiciosPanel;
 import com.canchapro.views.panels.TarifasPanel;
+import com.canchapro.views.panels.ConfiguracionPanel;
+import com.canchapro.views.panels.ReportesPanel;
 /**
  * Ventana principal de CanchaPro (VISTA).
  *
@@ -170,7 +172,11 @@ public class DashboardView extends javax.swing.JFrame {
             case TARIFAS:
                 return new TarifasPanel(sistema);
             case SERVICIOS:
-                return new ServiciosPanel(sistema);   
+                return new ServiciosPanel(sistema); 
+            case CONFIGURACION:
+                return new ConfiguracionPanel(sistema, this::alCambiarConfiguracion);
+            case REPORTES:
+                return new ReportesPanel(sistema);
             default:
                 return provisional(modulo.getTexto(), modulo.getAyuda() + ". Se implementa después.");
         }
@@ -186,6 +192,12 @@ public class DashboardView extends javax.swing.JFrame {
         actualizarIndicadores();
         mapaPanel.recargar();
         reservasPanel.recargar();
+    }
+     /** Cambió la configuración: el nombre del complejo se ve en el menú y en el título de la ventana. */
+    private void alCambiarConfiguracion() {
+        menu.setNombreNegocio(sistema.getNombreComplejo());
+        setTitle("CanchaPro - " + sistema.getNombreComplejo());
+        reservasPanel.recargar(); // el anticipo mínimo cambia cuándo se puede confirmar
     }
     private JPanel filaDeTarjetas(TarjetaIndicador... tarjetas) {
         JPanel fila = new JPanel(new FlowLayout(FlowLayout.LEFT, Tema.MARGEN, Tema.MARGEN));
