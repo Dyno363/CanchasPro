@@ -34,6 +34,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.SwingConstants;
+import com.canchapro.views.dialogs.PosDialog;
 /**
  *
  * @author SANTANA
@@ -216,7 +217,6 @@ public class MapaCanchasPanel extends JPanel{
             alCambiarDatos.run();
         }
     }
-
     /** El panel decide QUÉ abrir según el estado calculado por el controlador. */
     private void alHacerClicEnCancha(InfoCancha info) {
         if (info.getEstado().permiteAbrirPos()) {
@@ -229,24 +229,18 @@ public class MapaCanchasPanel extends JPanel{
             mostrarFicha(info);
         }
     }
-
     /**
-     * TEMPORAL hasta la Fase 8 (PosDialog). El controlador ya valida la regla
-     * "el POS solo se abre desde una cancha EN CURSO" y devuelve la reserva.
+     * Abre el POS para la reserva que se está jugando. El controlador valida la regla
+     * "el POS solo se abre desde una cancha EN CURSO" y devuelve esa reserva.
      */
     private void abrirPos(InfoCancha info) {
         try {
             Reserva reserva = mapa.getReservaParaPos(info.getCancha().getCodigo());
-            Object[] opciones = {"Ver detalle de la reserva", "Cerrar"};
-            int r = JOptionPane.showOptionDialog(this,
-                    "Partido en curso: " + reserva.getCodigo() + " · " + reserva.getCliente().getNombre()
-                    + "\nCancha: " + info.getCancha().getNombre()
-                    + "\n\nAquí se abrirá el POS (Tienda/Cafetería) para cargar productos a esta reserva."
-                    + "\nSe implementa en la Fase 8.",
-                    "POS · " + info.getCancha().getNombre(), JOptionPane.DEFAULT_OPTION,
-                    JOptionPane.INFORMATION_MESSAGE, null, opciones, opciones[0]);
-            if (r == 0) {
-                verDetalle(reserva);
+            PosDialog dialogo = new PosDialog(this, sistema, reserva.getCodigo());
+            dialogo.setVisible(true); // modal: espera hasta que se cierre
+            if (dialogo.getVentaRealizada() != null) {
+                recargar();
+                alCambiarDatos.run(); // el consumo de la reserva cambió
             }
         } catch (CanchaProException ex) {
             error(ex); // p. ej. el partido terminó justo antes del clic

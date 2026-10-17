@@ -46,6 +46,8 @@ import com.canchapro.views.panels.ServiciosPanel;
 import com.canchapro.views.panels.TarifasPanel;
 import com.canchapro.views.panels.ConfiguracionPanel;
 import com.canchapro.views.panels.ReportesPanel;
+import com.canchapro.views.panels.TiendaPanel;
+import com.canchapro.views.dialogs.PosDialog;
 /**
  * Ventana principal de CanchaPro (VISTA).
  *
@@ -177,12 +179,25 @@ public class DashboardView extends javax.swing.JFrame {
                 return new ConfiguracionPanel(sistema, this::alCambiarConfiguracion);
             case REPORTES:
                 return new ReportesPanel(sistema);
+             case TIENDA:
+                return new TiendaPanel(sistema, this::abrirVentaMostrador);    
             default:
                 return provisional(modulo.getTexto(), modulo.getAyuda() + ". Se implementa después.");
         }
     }
-
-    /** Se editó un cliente: su nombre nuevo debe verse en la lista de reservas y en el mapa. */
+     /** "Venta de mostrador" (desde Tienda): POS sin reserva; al cobrar, la tienda se pone al día. */
+    private void abrirVentaMostrador() {
+        try {
+            PosDialog dialogo = new PosDialog(this, sistema, null);
+            dialogo.setVisible(true); // modal: espera hasta que se cierre
+            JPanel tienda = modulos.get(ModuloMenu.TIENDA);
+            if (dialogo.getVentaRealizada() != null && tienda instanceof PanelModulo) {
+                ((PanelModulo) tienda).recargar(); // inventario y ventas del día cambiaron
+            }
+        } catch (CanchaProException ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage(), "Venta de mostrador", JOptionPane.ERROR_MESSAGE);
+        }
+    }
     private void alCambiarClientes() {
         reservasPanel.recargar();
         mapaPanel.recargar();
