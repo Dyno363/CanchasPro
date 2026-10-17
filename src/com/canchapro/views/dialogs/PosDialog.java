@@ -57,7 +57,10 @@ import javax.swing.table.DefaultTableCellRenderer;
 public class PosDialog extends JDialog{
     private static final long serialVersionUID = 1L;
     private static final String TODAS = "Todas";
-
+     /** Ancho aproximado de cada tarjeta de producto (para calcular cuántas caben por fila). */
+    private static final int ANCHO_TARJETA = 160;
+    /** Ancho del texto del nombre: si no cabe, baja a otra línea. */
+    private static final int ANCHO_TEXTO = 120;
     private final transient PosController pos;
     private final transient TiendaController tienda;
     private transient Venta realizada;
@@ -216,13 +219,26 @@ public class PosDialog extends JDialog{
         filtros.add(filaCantidad);
 
         pnlProductos.setOpaque(false);
-        JPanel contenedor = new JPanel(new BorderLayout());
+        JPanel contenedor = new PanelAjustadoAlAncho(); // nunca sale barra horizontal
+        contenedor.setLayout(new BorderLayout());
         contenedor.setOpaque(false);
         contenedor.add(pnlProductos, BorderLayout.NORTH); // los botones no se estiran a lo alto
         JScrollPane scr = new JScrollPane(contenedor);
         scr.setBorder(BorderFactory.createEmptyBorder());
         scr.getViewport().setBackground(Tema.color(ColorTema.SUPERFICIE));
         scr.getVerticalScrollBar().setUnitIncrement(16);
+        // Cuántos productos por fila según el ancho visible (igual que el mapa de canchas)
+        scr.getViewport().addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                int columnas = Math.max(2, scr.getViewport().getWidth() / ANCHO_TARJETA);
+                GridLayout grid = (GridLayout) pnlProductos.getLayout();
+                if (grid.getColumns() != columnas) {
+                    grid.setColumns(columnas);
+                    pnlProductos.revalidate();
+                }
+            }
+        });
 
         JLabel titulo = new JLabel("Productos (clic para agregar)");
         titulo.setFont(Tema.FUENTE_SUBTITULO);
@@ -338,13 +354,44 @@ public class PosDialog extends JDialog{
         pnlProductos.repaint();
     }
 
+        /**
+     * Tarjeta de un producto: el NOMBRE (hasta 2 líneas, se parte solo), el PRECIO
+     * y la EXISTENCIA, cada uno en su propia etiqueta. El alto lo decide el texto,
+     * así nada se corta aunque Windows use letras más grandes.
+     */
     private JButton botonDe(Producto p) {
-        JButton b = new JButton("<html><center><b>" + p.getNombre() + "</b><br>"
-                + MonedaUtil.formatear(p.getPrecio()) + "<br><small>" + p.getExistencia()
-                + " en inventario</small></center></html>");
+        JButton b = new JButton();
         Tema.botonSecundario(b);
-        b.setPreferredSize(new Dimension(130, 78));
-        b.setToolTipText(p.getCodigo() + " · " + p.getCategoria().getDescripcion());
+        b.setLayout(new javax.swing.BoxLayout(b, javax.swing.BoxLayout.Y_AXIS));
+        b.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(Tema.color(ColorTema.BORDE)),
+                BorderFactory.createEmptyBorder(8, 6, 8, 6)));
+
+        // El ancho fijo en el HTML hace que el nombre largo baje a una segunda línea
+        JLabel nombre = new JLabel("<html><div style='text-align:center; width:" + ANCHO_TEXTO + "px'>"
+                + p.getNombre() + "</div></html>", SwingConstants.CENTER);
+        nombre.setFont(Tema.FUENTE_NEGRITA);
+        nombre.setForeground(Tema.color(ColorTema.TEXTO));
+
+        JLabel precio = new JLabel(MonedaUtil.formatear(p.getPrecio()), SwingConstants.CENTER);
+        precio.setFont(Tema.FUENTE_SUBTITULO);
+        precio.setForeground(Tema.color(ColorTema.PRIMARIO));
+
+        JLabel existencia = new JLabel(p.getExistencia() + " en inventario", SwingConstants.CENTER);
+        existencia.setFont(Tema.FUENTE_PEQUENA);
+        existencia.setForeground(p.estaBajoMinimo()
+                ? Tema.oscurecer(Tema.color(ColorTema.ADVERTENCIA), 0.3) : Tema.color(ColorTema.TEXTO_SECUNDARIO));
+
+        for (JComponent c : new JComponent[]{nombre, precio, existencia}) {
+            c.setAlignmentX(Component.CENTER_ALIGNMENT);
+        }
+        b.add(nombre);
+        b.add(javax.swing.Box.createVerticalStrut(4));
+        b.add(precio);
+        b.add(javax.swing.Box.createVerticalStrut(2));
+        b.add(existencia);
+
+        b.setToolTipText(p.getCodigo() + " · " + p.getNombre() + " · " + p.getCategoria().getDescripcion());
         b.addActionListener(e -> agregar(p));
         return b;
     }
@@ -363,12 +410,42 @@ public class PosDialog extends JDialog{
     //  ACCIONES (cada una = una llamada al PosController)
     // =====================================================================
 
+        /** Dentro de un JScrollPane toma SIEMPRE el ancho visible: así no aparece la barra horizontal. */
+    private static final class PanelAjustadoAlAncho extends JPanel implements javax.swing.Scrollable {
+
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public Dimension getPreferredScrollableViewportSize() {
+            return getPreferredSize();
+        }
+
+        @Override
+        public int getScrollableUnitIncrement(java.awt.Rectangle visible, int orientacion, int direccion) {
+            return 16;
+        }
+
+        @Override
+        public int getScrollableBlockIncrement(java.awt.Rectangle visible, int orientacion, int direccion) {
+            return visible.height;
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportWidth() {
+            return true;
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportHeight() {
+            return false;
+        }
+    }
     /** Prueba 14: si se pide más de lo que hay, el modelo lanza StockInsuficienteException. */
     private void agregar(Producto p) {
         int cantidad = (Integer) spnCantidad.getValue();
         try {
             pos.agregarProducto(p.getCodigo(), cantidad);
-            mensaje("✔ " + cantidad + " × " + p.getNombre() + " agregado.", ColorTema.EXITO);
+            mensaje(" - " + cantidad + " × " + p.getNombre() + " agregado.", ColorTema.EXITO);
             spnCantidad.setValue(1);
         } catch (CanchaProException ex) {
             mensaje(ex.getMessage(), ColorTema.ERROR);
