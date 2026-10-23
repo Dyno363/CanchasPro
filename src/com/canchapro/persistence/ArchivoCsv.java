@@ -68,6 +68,18 @@ public class ArchivoCsv {
      * @return líneas válidas, cada una con su número de línea original
      */
     public static List<Linea> leer(Path archivo, int columnas, ResultadoCarga resultado) {
+        return leer(archivo, columnas, columnas, resultado);
+    }
+
+    /**
+     * Igual que la anterior, pero acepta líneas con MENOS columnas (formato anterior
+     * del archivo). Así, si un archivo gana una columna nueva, los datos guardados
+     * con la versión vieja se siguen leyendo.
+     *
+     * @param columnasMinimas columnas del formato anterior
+     * @param columnas        columnas del formato actual
+     */
+        public static List<Linea> leer(Path archivo, int columnasMinimas, int columnas, ResultadoCarga resultado) {
         List<Linea> lineas = new ArrayList<>();
         String nombre = archivo.getFileName().toString();
 
@@ -93,14 +105,14 @@ public class ArchivoCsv {
 
                 if (!encabezadoLeido) {
                     encabezadoLeido = true;
-                    if (campos.length != columnas) {
+                    if (campos.length < columnasMinimas || campos.length > columnas) {
                         resultado.registrarAdvertencia(nombre, numero, "El encabezado tiene " + campos.length
                                 + " columnas y se esperaban " + columnas + ".");
                     }
                     continue;
                 }
 
-                if (campos.length != columnas) {
+                  if (campos.length < columnasMinimas || campos.length > columnas) {
                     resultado.registrarError(nombre, numero, "Se esperaban " + columnas
                             + " columnas y hay " + campos.length + ". Línea ignorada.");
                     continue;
@@ -249,9 +261,9 @@ public class ArchivoCsv {
             return valor;
         }
 
-        /** @return true si el campo está vacío (columna opcional sin valor) */
+         /** @return true si el campo está vacío o no existe (columna opcional sin valor) */
         public boolean estaVacio(int indice) {
-            return campos[indice].isEmpty();
+            return indice >= campos.length || campos[indice].isEmpty();
         }
 
         @Override

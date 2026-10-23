@@ -138,7 +138,22 @@ public class PosController {
         ventaActual = null;
         return venta;
     }
+    /**
+     * Cierra la venta SIN cobrarla: el consumo queda como saldo pendiente de la
+     * reserva y se cobra después desde la ventana de Pagos. El inventario sí baja.
+     */
+    public Venta confirmarACuenta() throws CanchaProException {
+        Venta venta = exigirVentaAbierta();
+        venta.confirmarACuenta();
+        complejo.agregarVenta(venta);
+        ventaActual = null;
+        return venta;
+    }
 
+    /** La vista lo usa para mostrar u ocultar el botón "Dejar a cuenta". */
+    public boolean puedeDejarACuenta() {
+        return ventaActual != null && ventaActual.estaAsociadaAReserva();
+    }
     /** Descarta el carrito. No hay nada que deshacer: el inventario nunca se tocó. */
     public void cancelarVenta() {
         ventaActual = null;

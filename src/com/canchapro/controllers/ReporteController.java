@@ -174,7 +174,10 @@ public class ReporteController {
             }
         }
         for (Venta v : complejo.getVentas()) {
-            LocalDate fecha = v.getFechaHora().toLocalDate();
+            if (!v.isPagada()) {
+                continue; // a cuenta: todavía no es dinero en caja
+            }
+            LocalDate fecha = v.getFechaPago().toLocalDate(); // cuenta el día en que se COBRÓ
             if (enRango(fecha, desde, hasta)) {
                 porDia.computeIfAbsent(fecha, k -> new double[2])[1] += v.calcularTotal();
                 porMetodo.merge(v.getMetodoPago().getDescripcion(), v.calcularTotal(), Double::sum);
@@ -205,29 +208,48 @@ public class ReporteController {
     //  4. PAGOS PENDIENTES
     // =====================================================================
 
-    /** Reservas no canceladas con saldo, de la que más debe a la que menos. */
+    /**
+     * Reservas que deben dinero, de la que más debe a la que menos. La deuda es
+     * el saldo de la reserva (si no está cancelada) + su consumo de tienda a cuenta.
+     */
     public Reporte pagosPendientes() {
         List<Reserva> conSaldo = new ArrayList<>();
         for (Reserva r : complejo.getReservas()) {
-            if (r.getEstado() != EstadoReserva.CANCELADA && !r.estaPagada()) {
+            if (calcularPorCobrar(r) > 0) {
                 conSaldo.add(r);
             }
         }
-        conSaldo.sort(Comparator.comparingDouble(Reserva::calcularSaldo).reversed());
+        conSaldo.sort(Comparator.comparingDouble(this::calcularPorCobrar).reversed());
 
-        Reporte rep = new Reporte("Pagos pendientes", "Reservas no canceladas con saldo mayor a Q0.00",
-                "Reserva", "Cliente", "Teléfono", "Fecha", "Estado", "Total", "Pagado", "Saldo");
-        double totalSaldo = 0;
+        Reporte rep = new Reporte("Pagos pendientes", "Saldo de reservas + consumo de tienda a cuenta",
+                "Reserva", "Cliente", "Teléfono", "Fecha", "Estado", "Total", "Pagado", "Saldo reserva",
+                "Tienda a cuenta", "Por cobrar");
+        double totalReservas = 0;
+        double totalTienda = 0;
         for (Reserva r : conSaldo) {
+            double saldo = saldoReserva(r);
+            double tienda = complejo.calcularConsumoPendiente(r);
             rep.agregarFila(r.getCodigo(), r.getCliente().getNombre(), r.getCliente().getTelefono(),
                     FechaUtil.formatearFecha(r.getInicio().toLocalDate()), r.getEstado().getDescripcion(),
                     MonedaUtil.formatear(r.calcularTotal()), MonedaUtil.formatear(r.calcularTotalPagado()),
-                    MonedaUtil.formatear(r.calcularSaldo()));
-            totalSaldo += r.calcularSaldo();
+                    MonedaUtil.formatear(saldo), MonedaUtil.formatear(tienda), MonedaUtil.formatear(saldo + tienda));
+            totalReservas += saldo;
+            totalTienda += tienda;
         }
-        rep.agregarResumen("Reservas con saldo: " + conSaldo.size());
-        rep.agregarResumen("Total por cobrar: " + MonedaUtil.formatear(totalSaldo));
+        rep.agregarResumen("Reservas con deuda: " + conSaldo.size());
+        rep.agregarResumen("Saldo de reservas: " + MonedaUtil.formatear(totalReservas));
+        rep.agregarResumen("Consumo de tienda a cuenta: " + MonedaUtil.formatear(totalTienda));
+        rep.agregarResumen("Total por cobrar: " + MonedaUtil.formatear(totalReservas + totalTienda));
         return rep;
+    }
+
+    /** Una reserva cancelada ya no debe la cancha, pero sí lo que consumió en la tienda. */
+    private double saldoReserva(Reserva r) {
+        return r.getEstado() == EstadoReserva.CANCELADA ? 0 : r.calcularSaldo();
+    }
+
+    private double calcularPorCobrar(Reserva r) {
+        return MonedaUtil.redondear(saldoReserva(r) + complejo.calcularConsumoPendiente(r));
     }
 
     // =====================================================================
@@ -450,12 +472,18 @@ public class ReporteController {
                 }
             }
         }
-        double tienda = 0;
+                double tienda = 0;           // cobrado en tienda (por fecha de cobro)
+        double tiendaACuenta = 0;    // vendido en el mes y todavía sin cobrar
         int unidades = 0;
         for (Venta v : complejo.getVentas()) {
             if (enRango(v.getFechaHora().toLocalDate(), desde, hasta)) {
-                tienda += v.calcularTotal();
                 unidades += v.contarUnidades();
+                if (v.isPendienteDePago()) {
+                    tiendaACuenta += v.calcularTotal();
+                }
+            }
+            if (v.isPagada() && enRango(v.getFechaPago().toLocalDate(), desde, hasta)) {
+                tienda += v.calcularTotal();
             }
         }
 
@@ -470,7 +498,9 @@ public class ReporteController {
         rep.agregarFila("Facturado en reservas (sin canceladas)", MonedaUtil.formatear(facturado));
         rep.agregarFila("Cobrado en el mes (pagos)", MonedaUtil.formatear(cobrado));
         rep.agregarFila("Saldo pendiente de reservas del mes", MonedaUtil.formatear(saldoPendiente));
-        rep.agregarFila("Ventas de tienda (" + unidades + " unidades)", MonedaUtil.formatear(tienda));
+        rep.agregarFila("Ventas de tienda cobradas (" + unidades + " unidades vendidas)",
+                MonedaUtil.formatear(tienda));
+        rep.agregarFila("Consumo de tienda a cuenta (sin cobrar)", MonedaUtil.formatear(tiendaACuenta));
         rep.agregarFila("INGRESO TOTAL DEL MES (cobrado + tienda)", MonedaUtil.formatear(cobrado + tienda));
         rep.agregarResumen("Facturado = suma de totales de reservas del mes (cancha + servicios).");
         rep.agregarResumen("Cobrado = pagos cuya fecha cae en el mes (criterio de caja).");

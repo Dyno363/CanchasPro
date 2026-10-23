@@ -58,6 +58,21 @@ public class ModeloTablaReservas extends AbstractTableModel{
         "Código", "Inicio", "Horario", "Cancha", "Cliente", "Estado", "Total", "Saldo"
     };
 
+    /**
+     * Cómo se calcula la columna Saldo. Por defecto, solo el saldo de la reserva;
+     * el panel le pasa {@code PagoController::getSaldoTotal} para incluir la
+     * tienda a cuenta. Así el modelo de tabla no conoce a ningún controlador.
+     */
+    private transient java.util.function.Function<Reserva, Double> calculoSaldo =
+            r -> r.getEstado() == EstadoReserva.CANCELADA ? 0.0 : r.calcularSaldo();
+
+    /** @param calculo función que da el saldo de una reserva (null = la de por defecto) */
+    public void setCalculoSaldo(java.util.function.Function<Reserva, Double> calculo) {
+        if (calculo != null) {
+            this.calculoSaldo = calculo;
+            fireTableDataChanged();
+        }
+    }
     /** Tipo de dato de cada columna: permite ordenar bien (fechas y montos, no texto). */
     private static final Class<?>[] TIPOS = {
         String.class, LocalDateTime.class, String.class, String.class, String.class,
@@ -143,9 +158,9 @@ public class ModeloTablaReservas extends AbstractTableModel{
             case COL_TOTAL:
                 return r.calcularTotal();
             case COL_SALDO:
-                // Una reserva cancelada ya no se cobra: no se muestra como deuda
-                // (misma regla que PagoController.getReservasConSaldo).
-                return r.getEstado() == EstadoReserva.CANCELADA ? null : r.calcularSaldo();
+                // Una cancelada sin deuda de tienda se muestra vacía (no se cobra).
+                double saldo = calculoSaldo.apply(r);
+                return r.getEstado() == EstadoReserva.CANCELADA && MonedaUtil.esCero(saldo) ? null : saldo;
             default:
                 return null;
         }

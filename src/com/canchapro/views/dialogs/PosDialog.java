@@ -82,6 +82,7 @@ public class PosDialog extends JDialog{
     private final JButton btnQuitar = new JButton("Quitar");
     private final JButton btnVaciar = new JButton("Vaciar");
     private final JButton btnCancelar = new JButton("Cancelar venta");
+     private final JButton btnACuenta = new JButton("Dejar a cuenta");
     private final JButton btnCobrar = new JButton("Cobrar");
     private final JLabel lblMensaje = new JLabel(" ");
 
@@ -306,10 +307,15 @@ public class PosDialog extends JDialog{
         Tema.botonSecundario(btnCancelar);
         Tema.botonPrimario(btnCobrar);
         btnCancelar.addActionListener(e -> cancelar());
-        btnCobrar.addActionListener(e -> cobrar());
+       btnCobrar.addActionListener(e -> cobrar());
+        Tema.botonSecundario(btnACuenta);
+        btnACuenta.setToolTipText("No se cobra ahora: el consumo queda como saldo pendiente de la reserva.");
+        btnACuenta.addActionListener(e -> dejarACuenta());
+        btnACuenta.setVisible(pos.puedeDejarACuenta()); // solo existe para ventas de una reserva
         JPanel filaBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT, Tema.ESPACIO, 0));
         filaBotones.setOpaque(false);
         filaBotones.add(btnCancelar);
+        filaBotones.add(btnACuenta);
         filaBotones.add(btnCobrar);
 
         JPanel abajo = new JPanel(new GridLayout(4, 1, 0, Tema.ESPACIO));
@@ -402,6 +408,7 @@ public class PosDialog extends JDialog{
         modeloCarrito.setElementos(lineas);
         lblTotal.setText(MonedaUtil.formatear(pos.getTotal()));
         btnCobrar.setEnabled(!lineas.isEmpty());
+        btnACuenta.setEnabled(!lineas.isEmpty());
         btnVaciar.setEnabled(!lineas.isEmpty());
         btnQuitar.setEnabled(tblCarrito.getSelectedRow() >= 0);
     }
@@ -504,7 +511,20 @@ public class PosDialog extends JDialog{
         pos.cancelarVenta();
         dispose();
     }
-
+    /** Cierra la venta sin cobrar: queda como saldo pendiente de la reserva. */
+    private void dejarACuenta() {
+        try {
+            realizada = pos.confirmarACuenta();
+            mostrarComprobante(realizada);
+            dispose();
+        } catch (CanchaProException ex) {
+            mensaje(ex.getMessage(), ColorTema.ERROR);
+            cargarProductos(); // las existencias pudieron cambiar
+            actualizarCarrito();
+        }
+    }
+    
+/** Comprobante de la venta: productos, total y cómo se pagó (o si quedó a cuenta). */
     private void mostrarComprobante(Venta v) {
         StringBuilder sb = new StringBuilder("<html><b>Venta " + v.getNumero() + "</b> · "
                 + FechaUtil.formatearFechaHora(v.getFechaHora()) + "<br>"
@@ -515,8 +535,13 @@ public class PosDialog extends JDialog{
               .append(MonedaUtil.formatear(d.getSubtotal())).append("<br>");
         }
         sb.append("<br><b>Total: ").append(MonedaUtil.formatear(v.calcularTotal())).append("</b> · ")
-          .append(v.getMetodoPago().getDescripcion()).append("</html>");
-        JOptionPane.showMessageDialog(this, sb.toString(), "Venta registrada", JOptionPane.INFORMATION_MESSAGE);
+          .append(v.isPendienteDePago()
+                  ? "<font color='#B45309'>A CUENTA: queda como saldo pendiente de la reserva</font>"
+                  : v.getMetodoPago().getDescripcion())
+          .append("</html>");
+        JOptionPane.showMessageDialog(this, sb.toString(),
+                v.isPendienteDePago() ? "Venta cargada a cuenta" : "Venta registrada",
+                JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void mensaje(String texto, ColorTema color) {

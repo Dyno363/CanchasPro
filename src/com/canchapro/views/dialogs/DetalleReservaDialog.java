@@ -245,11 +245,12 @@ public class DetalleReservaDialog extends JDialog{
     }
 
     private JComponent crearTablaTienda(TiendaController tienda, Reserva r) throws CanchaProException {
-        DefaultTableModel m = modelo("Venta", "Fecha", "Producto", "Cantidad", "Subtotal");
+        DefaultTableModel m = modelo("Venta", "Fecha", "Producto", "Cantidad", "Subtotal", "Pago");
         for (Venta v : tienda.getVentasDeReserva(r.getCodigo())) {
+            String pago = v.isPendienteDePago() ? "Pendiente (a cuenta)" : v.getMetodoPago().getDescripcion();
             for (DetalleVenta d : v.getDetalles()) {
                 m.addRow(new Object[]{v.getNumero(), FechaUtil.formatearFechaHora(v.getFechaHora()),
-                    d.getProducto().getNombre(), d.getCantidad(), MonedaUtil.formatear(d.getSubtotal())});
+                    d.getProducto().getNombre(), d.getCantidad(), MonedaUtil.formatear(d.getSubtotal()), pago});
             }
         }
         return tabla(m, "Sin consumos de tienda/cafetería.");

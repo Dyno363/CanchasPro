@@ -123,7 +123,7 @@ public class CargadorDatos {
         procesar(ARCHIVO_RESERVAS, 12, this::cargarReserva);
         procesar(ARCHIVO_SERVICIOS_RESERVA, 5, this::cargarServicioReserva);
         procesar(ARCHIVO_PAGOS, 6, this::cargarPago);
-        procesar(ARCHIVO_VENTAS, 6, this::cargarVenta);
+        procesar(ARCHIVO_VENTAS, 6, 7, this::cargarVenta); // 6 = formato anterior (sin fechaPago)
         procesar(ARCHIVO_DETALLE_VENTAS, 5, this::cargarDetalleVenta);
         verificarTotalesDeVentas();
 
@@ -140,8 +140,18 @@ public class CargadorDatos {
         void procesar(ArchivoCsv.Linea linea) throws CanchaProException;
     }
 
+    /** Archivo con una cantidad FIJA de columnas (la mayoría). */
     private void procesar(String nombreArchivo, int columnas, ProcesadorLinea procesador) {
-        List<ArchivoCsv.Linea> lineas = ArchivoCsv.leer(carpeta.resolve(nombreArchivo), columnas, resultado);
+        procesar(nombreArchivo, columnas, columnas, procesador);
+    }
+
+    /**
+     * Archivo que acepta entre {@code columnasMinimas} y {@code columnas}: así un
+     * CSV guardado con el formato anterior (menos columnas) se sigue leyendo.
+     */
+    private void procesar(String nombreArchivo, int columnasMinimas, int columnas, ProcesadorLinea procesador) {
+        List<ArchivoCsv.Linea> lineas = ArchivoCsv.leer(carpeta.resolve(nombreArchivo), columnasMinimas,
+                columnas, resultado);
         for (ArchivoCsv.Linea linea : lineas) {
             try {
                 procesador.procesar(linea);
@@ -285,14 +295,20 @@ public class CargadorDatos {
     //  10-11. TIENDA
     // =====================================================================
 
-    /** numero;fechaHora;codigoReserva;metodoPago;vendedor;total */
+    /**
+     * numero;fechaHora;codigoReserva;metodoPago;vendedor;total;fechaPago
+     * <br>metodoPago vacío = venta "a cuenta" de la reserva, todavía sin cobrar.
+     * <br>fechaPago puede no existir (archivos del formato anterior, de 6 columnas).
+     */
     private void cargarVenta(ArchivoCsv.Linea l) throws CanchaProException {
         Reserva reserva = l.estaVacio(2) ? null : buscarReserva(l.get(2));
+        MetodoPago metodo = l.estaVacio(3) ? null : leerEnum(MetodoPago.class, l.get(3), "metodoPago");
         Venta venta = new Venta(l.get(0),
                 FechaUtil.leerFechaHora(l.get(1)),
                 reserva,
                 buscarUsuario(l.getRequerido(4, "vendedor")),
-                leerEnum(MetodoPago.class, l.get(3), "metodoPago"));
+                metodo,
+                l.estaVacio(6) ? null : FechaUtil.leerFechaHora(l.get(6)));
         double totalDeclarado = MonedaUtil.leer(l.get(5));
         complejo.agregarVenta(venta);
         totalesDeclarados.put(venta.getNumero(), totalDeclarado);

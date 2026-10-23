@@ -62,6 +62,7 @@ public class ReservasPanel extends javax.swing.JPanel {
 
     private void prepararComponentes() {
         modelo.configurar(tblReservas);
+        modelo.setCalculoSaldo(sistema.getPagoController()::getSaldoTotal); // saldo + tienda a cuenta
         // Cada vez que cambia la fila seleccionada se habilitan/deshabilitan botones
         tblReservas.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
@@ -183,11 +184,11 @@ public class ReservasPanel extends javax.swing.JPanel {
      * Habilita solo las acciones que la reserva permite. La regla la decide el
      * MODELO ({@code EstadoReserva.puedeTransicionarA}); la vista solo pregunta.
      */
-    private void actualizarBotones() {
+     private void actualizarBotones() {
         Reserva r = seleccionada();
         EstadoReserva e = r == null ? null : r.getEstado();
         btnDetalle.setEnabled(r != null);
-        btnPagar.setEnabled(r != null && e != EstadoReserva.CANCELADA && !r.estaPagada());
+        btnPagar.setEnabled(r != null && sistema.getPagoController().tieneAlgoPorCobrar(r));
         btnConfirmar.setEnabled(e != null && e.puedeTransicionarA(EstadoReserva.CONFIRMADA));
         btnIniciar.setEnabled(e != null && e.puedeTransicionarA(EstadoReserva.EN_CURSO));
         btnFinalizar.setEnabled(e != null && e.puedeTransicionarA(EstadoReserva.FINALIZADA));

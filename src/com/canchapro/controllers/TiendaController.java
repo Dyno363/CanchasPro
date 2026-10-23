@@ -6,6 +6,9 @@ package com.canchapro.controllers;
 import com.canchapro.models.ComplejoDeportivo;
 import com.canchapro.models.enums.CategoriaProducto;
 import com.canchapro.models.enums.EstadoProducto;
+import com.canchapro.models.enums.MetodoPago;
+import com.canchapro.utils.FechaUtil;
+import java.time.LocalDateTime;
 import com.canchapro.models.exceptions.CanchaProException;
 import com.canchapro.models.exceptions.DatoInvalidoException;
 import com.canchapro.models.exceptions.EntidadNoEncontradaException;
@@ -20,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+
 /**
  *
  * @author SANTANA
@@ -209,6 +213,37 @@ public class TiendaController {
     /** Total consumido en la tienda por una reserva. */
     public double getConsumoDeReserva(String codigoReserva) throws EntidadNoEncontradaException {
         return complejo.calcularConsumoTienda(obtenerReserva(codigoReserva));
+    }
+     /** Consumo de tienda que la reserva dejó "a cuenta" y todavía debe. */
+    public double getConsumoPendiente(String codigoReserva) throws EntidadNoEncontradaException {
+        return complejo.calcularConsumoPendiente(obtenerReserva(codigoReserva));
+    }
+
+    /**
+     * Cobra TODO el consumo pendiente de una reserva con un mismo método de pago.
+     * El ingreso cuenta con la fecha de HOY.
+     */
+    public double cobrarConsumoPendiente(String codigoReserva, MetodoPago metodo) throws CanchaProException {
+        if (metodo == null) {
+            throw new DatoInvalidoException("Seleccione el método de pago.");
+        }
+        Reserva reserva = obtenerReserva(codigoReserva);
+        List<Venta> pendientes = new ArrayList<>();
+        for (Venta v : complejo.getVentasDeReserva(reserva)) {
+            if (v.isPendienteDePago()) {
+                pendientes.add(v);
+            }
+        }
+        if (pendientes.isEmpty()) {
+            throw new DatoInvalidoException("La reserva " + codigoReserva + " no tiene consumo de tienda pendiente.");
+        }
+        LocalDateTime ahora = FechaUtil.ahora();
+        double total = 0;
+        for (Venta v : pendientes) {
+            v.liquidar(metodo, ahora);
+            total += v.calcularTotal();
+        }
+        return MonedaUtil.redondear(total);
     }
  
     // =====================================================================

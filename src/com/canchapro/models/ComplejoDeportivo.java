@@ -416,7 +416,16 @@ public class ComplejoDeportivo {
         }
         return resultado;
     }
-
+    /** Consumo de tienda que quedó "a cuenta" de la reserva y todavía no se cobra. */
+    public double calcularConsumoPendiente(Reserva reserva) {
+        double total = 0;
+        for (Venta venta : getVentasDeReserva(reserva)) {
+            if (venta.isPendienteDePago()) {
+                total += venta.calcularTotal();
+            }
+        }
+        return MonedaUtil.redondear(total);
+    }
     /** Total consumido en la tienda por una reserva. */
     public double calcularConsumoTienda(Reserva reserva) {
         double total = 0;

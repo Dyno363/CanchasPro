@@ -46,6 +46,7 @@ public class Venta {
     private final Usuario vendedor;
     private final List<DetalleVenta> detalles;
     private MetodoPago metodoPago;
+    private LocalDateTime fechaPago;
     private boolean confirmada;
 
     /**
@@ -57,24 +58,38 @@ public class Venta {
      * @param vendedor  operador que atiende
      * @throws DatoInvalidoException si faltan datos o la reserva está cancelada o finalizada
      */
-    public Venta(String numero, LocalDateTime fechaHora, Reserva reserva, Usuario vendedor)
+   public Venta(String numero, LocalDateTime fechaHora, Reserva reserva, Usuario vendedor)
             throws DatoInvalidoException {
-        this(numero, fechaHora, validarReservaActiva(reserva), vendedor, null, false);
+        this(numero, fechaHora, validarReservaActiva(reserva), vendedor, null, null, false);
     }
 
     /**
-     * Reconstruye una venta YA CONFIRMADA (desde ventas.csv). Sus líneas se
-     * agregan después con {@link #restaurarDetalle}.
-     *
-     * @throws DatoInvalidoException si faltan datos
+     * Reconstruye una venta YA CONFIRMADA y PAGADA en el momento (formato anterior de ventas.csv).
      */
     public Venta(String numero, LocalDateTime fechaHora, Reserva reserva, Usuario vendedor,
                  MetodoPago metodoPago) throws DatoInvalidoException {
-        this(numero, fechaHora, reserva, vendedor, exigirMetodo(metodoPago), true);
+        this(numero, fechaHora, reserva, vendedor, exigirMetodo(metodoPago), fechaHora, true);
+    }
+
+    /**
+     * Reconstruye una venta YA CONFIRMADA (desde ventas.csv).
+     *
+     * @param metodoPago null = venta a cuenta sin pagar (solo válido si tiene reserva)
+     * @param fechaPago  cuándo se cobró (null si sigue pendiente; si viene null en una
+     *                   venta pagada se asume la fecha de la venta)
+     */
+    public Venta(String numero, LocalDateTime fechaHora, Reserva reserva, Usuario vendedor,
+                 MetodoPago metodoPago, LocalDateTime fechaPago) throws DatoInvalidoException {
+        this(numero, fechaHora, reserva, vendedor, metodoPago,
+                metodoPago == null ? null : (fechaPago == null ? fechaHora : fechaPago), true);
+        if (metodoPago == null && reserva == null) {
+            throw new DatoInvalidoException("La venta " + numero
+                    + " está pendiente de pago pero no tiene reserva a la cual cargarse.");
+        }
     }
 
     private Venta(String numero, LocalDateTime fechaHora, Reserva reserva, Usuario vendedor,
-                  MetodoPago metodoPago, boolean confirmada) throws DatoInvalidoException {
+                  MetodoPago metodoPago, LocalDateTime fechaPago, boolean confirmada) throws DatoInvalidoException {
         this.numero = Validador.validarRequerido(numero, "número de venta");
         if (fechaHora == null) {
             throw new DatoInvalidoException("La fecha de la venta es obligatoria.");
@@ -86,6 +101,7 @@ public class Venta {
         this.reserva = reserva;
         this.vendedor = vendedor;
         this.metodoPago = metodoPago;
+        this.fechaPago = fechaPago;
         this.confirmada = confirmada;
         this.detalles = new ArrayList<>();
     }
@@ -120,7 +136,20 @@ public class Venta {
     public MetodoPago getMetodoPago() {
         return metodoPago;
     }
+    /** @return cuándo entró el dinero, o null si todavía no se ha cobrado */
+    public LocalDateTime getFechaPago() {
+        return fechaPago;
+    }
 
+    /** @return true si se cerró "a cuenta" de la reserva y todavía no se cobra */
+    public boolean isPendienteDePago() {
+        return confirmada && metodoPago == null;
+    }
+
+    /** @return true si ya está confirmada y cobrada (cuenta como dinero en caja) */
+    public boolean isPagada() {
+        return confirmada && metodoPago != null;
+    }
     public boolean isConfirmada() {
         return confirmada;
     }
@@ -190,18 +219,51 @@ public class Venta {
     //  CONFIRMACIÓN
     // =====================================================================
 
-    /**
-     * Cierra la venta y descuenta el inventario de todos sus productos.
-     *
-     * Primero verifica TODAS las líneas y solo después descuenta. Así, si
-     * un producto no alcanza, ningún inventario se modifica ("todo o nada").
-     *
-     * @throws StockInsuficienteException si algún producto ya no alcanza (otro operador lo vendió)
-     * @throws DatoInvalidoException      si la venta está vacía, ya confirmada o sin método de pago
+     /**
+     * Cierra la venta COBRÁNDOLA en el momento y descuenta el inventario de todos sus productos.
+     * Primero verifica TODAS las líneas y solo después descuenta ("todo o nada").
      */
     public void confirmar(MetodoPago metodo) throws StockInsuficienteException, DatoInvalidoException {
-        exigirAbierta();
         exigirMetodo(metodo);
+        cerrarYDescontar();
+        this.metodoPago = metodo;
+        this.fechaPago = fechaHora;
+    }
+
+    /**
+     * Cierra la venta SIN cobrarla: el consumo queda como saldo pendiente de la
+     * reserva. El inventario se descuenta igual, porque el producto ya se entregó.
+     */
+    public void confirmarACuenta() throws StockInsuficienteException, DatoInvalidoException {
+        if (reserva == null) {
+            throw new DatoInvalidoException("Solo una venta cargada a una reserva puede quedar a cuenta. "
+                    + "En mostrador se cobra al momento.");
+        }
+        cerrarYDescontar();
+        this.metodoPago = null;
+        this.fechaPago = null;
+    }
+
+    /**
+     * Cobra una venta que quedó a cuenta.
+     *
+     * @param fecha momento del cobro (cuenta como ingreso de ESE día)
+     */
+    public void liquidar(MetodoPago metodo, LocalDateTime fecha) throws DatoInvalidoException {
+        if (!isPendienteDePago()) {
+            throw new DatoInvalidoException("La venta " + numero + " no tiene un saldo pendiente.");
+        }
+        exigirMetodo(metodo);
+        if (fecha == null) {
+            throw new DatoInvalidoException("La fecha del cobro es obligatoria.");
+        }
+        this.metodoPago = metodo;
+        this.fechaPago = fecha;
+    }
+
+    /** Parte común de confirmar y confirmarACuenta: "todo o nada" con el inventario. */
+    private void cerrarYDescontar() throws StockInsuficienteException, DatoInvalidoException {
+        exigirAbierta();
         if (detalles.isEmpty()) {
             throw new DatoInvalidoException("La venta no tiene productos.");
         }
@@ -217,7 +279,6 @@ public class Venta {
         for (DetalleVenta detalle : detalles) {
             detalle.getProducto().descontarStock(detalle.getCantidad());
         }
-        this.metodoPago = metodo;
         this.confirmada = true;
     }
 

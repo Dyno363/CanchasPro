@@ -72,7 +72,7 @@ public class TiendaPanel extends PanelListado<Producto>{
     private final JLabel lblVentas = new JLabel(" ");
     private final JCheckBox chkTodas = new JCheckBox("Ver todas las ventas");
     private final JButton btnMostrador = new JButton("Venta de mostrador");
-    private final ModeloTablaLista<Venta> modeloVentas = new ModeloTablaLista<>(
+        private final ModeloTablaLista<Venta> modeloVentas = new ModeloTablaLista<>(
             new String[]{"Venta", "Fecha y hora", "Para", "Vendedor", "Unidades", "Método", "Total"},
             new Class<?>[]{String.class, LocalDateTime.class, String.class, String.class, Integer.class,
                 String.class, Double.class},
@@ -80,7 +80,10 @@ public class TiendaPanel extends PanelListado<Producto>{
                 v.estaAsociadaAReserva() ? "Reserva " + v.getReserva().getCodigo() + " · "
                         + v.getReserva().getCliente().getNombre() : "Mostrador (sin reserva)",
                 v.getVendedor().getNombre(), v.contarUnidades(),
-                v.getMetodoPago() == null ? "" : v.getMetodoPago().getDescripcion(), v.calcularTotal()});
+                v.isPendienteDePago() ? "A cuenta (pendiente)"
+                        : v.getMetodoPago() == null ? "" : v.getMetodoPago().getDescripcion(),
+                v.calcularTotal()}
+    );
     private final JTable tblVentas = new JTable(modeloVentas);
     private final JScrollPane scrVentas = new JScrollPane(tblVentas);
 

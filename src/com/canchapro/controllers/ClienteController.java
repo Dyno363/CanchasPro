@@ -96,6 +96,7 @@ public class ClienteController {
         for (Reserva r : getHistorial(codigoCliente)) {
             total++;
             pagado += r.calcularTotalPagado();
+            saldo += complejo.calcularConsumoPendiente(r); // tienda a cuenta: se debe aunque se cancele
             if (r.getEstado() == EstadoReserva.CANCELADA) {
                 canceladas++;
                 continue; // una cancelada no es deuda

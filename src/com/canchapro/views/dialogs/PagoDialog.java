@@ -4,6 +4,7 @@
  */
 package com.canchapro.views.dialogs;
 import com.canchapro.controllers.PagoController;
+import com.canchapro.controllers.TiendaController;
 import com.canchapro.controllers.ReservaController;
 import com.canchapro.controllers.SistemaController;
 import com.canchapro.models.enums.ColorTema;
@@ -42,28 +43,30 @@ import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 import javax.swing.table.DefaultTableModel;
 /**
- ** Ventana de COBRO de una reserva (modal, construida por código).
+ * Ventana de COBRO de una reserva (modal, construida por código).
  *
- * 
  *  ┌ Pagos · R0006 ──────────────────────────────────────────────┐
  *  │ Luis Hernández · La Bombonera · 16/10/2026 08:00 - 10:00     │
  *  │ [ Total Q340 ] [ Pagado Q150 ] [ Saldo Q190 ]  ████░░ 44%    │
+ *  │ ▌Consumo de tienda a cuenta: Q23.00        [Cobrar consumo]  │
  *  │ Historial de pagos (tabla)                                   │
  *  │ Monto [     ]  Método [Efectivo ▼]  Referencia [          ]  │
  *  │ (mensaje)    [Cerrar] [Pagar saldo Q190.00] [Registrar abono]│
  *  └──────────────────────────────────────────────────────────────┘
- * 
  *
  * MVC: el monto se envía como TEXTO al {@link PagoController}, que lo convierte
  * y valida (mayor que cero, no mayor que el saldo, referencia obligatoria en
- * transferencia/depósito). La vista solo muestra el resumen que él calcula.
+ * transferencia/depósito). El consumo de tienda a cuenta lo calcula y lo cobra
+ * el {@link TiendaController}. La vista solo muestra y llama.
  * @author SANTANA
  */
-public class PagoDialog extends JDialog{
+public class PagoDialog extends JDialog {
+
     private static final long serialVersionUID = 1L;
 
     private final transient PagoController pagos;
     private final transient ReservaController reservas;
+    private final transient TiendaController tienda;
     private final String codigoReserva;
     private boolean huboCambios;
 
@@ -73,6 +76,10 @@ public class PagoDialog extends JDialog{
     private final JLabel lblSaldo = new JLabel();
     private final JProgressBar barPagado = new JProgressBar(0, 100);
     private final JLabel lblAnticipo = new JLabel(" ");
+    /** Fila "Consumo de tienda a cuenta" (solo visible si la reserva debe algo de la tienda). */
+    private final JPanel filaTienda = new JPanel(new BorderLayout(Tema.ESPACIO, 0));
+    private final JLabel lblTienda = new JLabel();
+    private final JButton btnCobrarTienda = new JButton("Cobrar consumo");
     private final DefaultTableModel modeloPagos = new DefaultTableModel(
             new Object[]{"Código", "Fecha", "Método", "Monto", "Observación"}, 0) {
         private static final long serialVersionUID = 1L;
@@ -102,6 +109,7 @@ public class PagoDialog extends JDialog{
         super(ventanaDe(origen), "Pagos · " + codigoReserva, ModalityType.APPLICATION_MODAL);
         this.pagos = sistema.getPagoController();
         this.reservas = sistema.getReservaController();
+        this.tienda = sistema.getTiendaController();
         this.codigoReserva = codigoReserva;
         Reserva r = reservas.obtener(codigoReserva); // valida que exista
         lblReserva.setText(r.getCliente().getNombre() + "   ·   " + r.getCancha().getNombre() + "   ·   "
@@ -120,7 +128,7 @@ public class PagoDialog extends JDialog{
         return SwingUtilities.getWindowAncestor(origen);
     }
 
-    /** @return true si se registró al menos un pago o se confirmó la reserva */
+    /** @return true si se registró al menos un pago, se cobró tienda o se confirmó la reserva */
     public boolean huboCambios() {
         return huboCambios;
     }
@@ -160,6 +168,21 @@ public class PagoDialog extends JDialog{
         Tema.textoSecundario(lblAnticipo);
         lblAnticipo.setAlignmentX(LEFT_ALIGNMENT);
         arriba.add(lblAnticipo);
+
+        // ---- Consumo de tienda que la reserva dejó a cuenta
+        filaTienda.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 4, 0, 0, Tema.color(ColorTema.ADVERTENCIA)),
+                BorderFactory.createEmptyBorder(6, 10, 6, 0)));
+        filaTienda.setOpaque(false);
+        filaTienda.setAlignmentX(LEFT_ALIGNMENT);
+        lblTienda.setFont(Tema.FUENTE_NEGRITA);
+        Tema.botonSecundario(btnCobrarTienda);
+        btnCobrarTienda.setToolTipText("Cobra todo el consumo de tienda pendiente con el método seleccionado abajo.");
+        btnCobrarTienda.addActionListener(e -> cobrarTienda());
+        filaTienda.add(lblTienda, BorderLayout.CENTER);
+        filaTienda.add(btnCobrarTienda, BorderLayout.EAST);
+        arriba.add(javax.swing.Box.createVerticalStrut(Tema.ESPACIO));
+        arriba.add(filaTienda);
         raiz.add(arriba, BorderLayout.NORTH);
 
         // ---- Centro: historial de pagos
@@ -233,7 +256,7 @@ public class PagoDialog extends JDialog{
     }
 
     // =====================================================================
-    //  MOSTRAR (los números los calcula el PagoController)
+    //  MOSTRAR (los números los calculan los controladores)
     // =====================================================================
 
     private void refrescar() {
@@ -248,7 +271,7 @@ public class PagoDialog extends JDialog{
             lblAnticipo.setText(r.getAnticipoMinimo() > 0
                     ? "Anticipo mínimo para confirmar: " + MonedaUtil.formatear(r.getAnticipoMinimo())
                       + (r.getFaltaParaAnticipo() > 0
-                         ? "  (faltan " + MonedaUtil.formatear(r.getFaltaParaAnticipo()) + ")" : "  ✓ cubierto")
+                         ? "  (faltan " + MonedaUtil.formatear(r.getFaltaParaAnticipo()) + ")" : "  (cubierto)")
                     : "No se exige anticipo mínimo para confirmar.");
 
             modeloPagos.setRowCount(0);
@@ -258,12 +281,19 @@ public class PagoDialog extends JDialog{
                     p.tieneObservacion() ? p.getObservacion() : ""});
             }
 
-            // Si ya está pagada no hay nada más que cobrar
+            // Consumo de tienda a cuenta (lo calcula el TiendaController)
+            double pendienteTienda = tienda.isModuloActivo() ? tienda.getConsumoPendiente(codigoReserva) : 0;
+            filaTienda.setVisible(pendienteTienda > 0);
+            lblTienda.setText("Consumo de tienda a cuenta: " + MonedaUtil.formatear(pendienteTienda));
+
+            // Si ya está pagada no hay nada más que abonar a la cancha
             boolean pagada = r.estaPagada();
             btnPagarSaldo.setText(pagada ? "Pagar saldo" : "Pagar saldo " + MonedaUtil.formatear(r.getSaldo()));
-            for (JComponent c : new JComponent[]{txtMonto, cmbMetodo, txtObservacion, btnAbonar, btnPagarSaldo}) {
+            for (JComponent c : new JComponent[]{txtMonto, txtObservacion, btnAbonar, btnPagarSaldo}) {
                 c.setEnabled(!pagada);
             }
+            // El método de pago también sirve para cobrar la tienda
+            cmbMetodo.setEnabled(!pagada || pendienteTienda > 0);
         } catch (CanchaProException ex) {
             lblMensaje.setText(ex.getMessage());
         }
@@ -288,6 +318,20 @@ public class PagoDialog extends JDialog{
             Pago p = pagos.pagarSaldo(codigoReserva, (MetodoPago) cmbMetodo.getSelectedItem(),
                     txtObservacion.getText());
             despuesDePagar(p);
+        } catch (CanchaProException ex) {
+            lblMensaje.setText(ex.getMessage());
+        }
+    }
+
+    /** Cobra todo el consumo de tienda que quedó a cuenta, con el método elegido. */
+    private void cobrarTienda() {
+        try {
+            double cobrado = tienda.cobrarConsumoPendiente(codigoReserva, (MetodoPago) cmbMetodo.getSelectedItem());
+            huboCambios = true;
+            lblMensaje.setText(" ");
+            refrescar();
+            JOptionPane.showMessageDialog(this, "Consumo de tienda cobrado: " + MonedaUtil.formatear(cobrado)
+                    + " (" + cmbMetodo.getSelectedItem() + ").", "Tienda", JOptionPane.INFORMATION_MESSAGE);
         } catch (CanchaProException ex) {
             lblMensaje.setText(ex.getMessage());
         }

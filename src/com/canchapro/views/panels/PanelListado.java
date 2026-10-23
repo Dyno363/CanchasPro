@@ -41,7 +41,7 @@ import javax.swing.table.TableRowSorter;
  *   {@link #alCambiarSeleccion(Object)}: habilitar sus botones.
  * 
  *
- * <pre>
+ * 
  *  ┌ Título ───────────────────────────────────────────────┐
  *  │ Subtítulo                                    │
  *  │ conteo            [botón] [botón] [botón]    │
@@ -49,7 +49,7 @@ import javax.swing.table.TableRowSorter;
  *  │ └───────────────────────────────────────────-──────┘   │
  *  │ (pie opcional: avisos, simulador…)           │
  *  └───────────────────────────────────────────────────--────┘
- * </pre>
+ 
  *
  * @param <T> tipo de objeto que lista (Cancha, Tarifa, ServicioAdicional)
  */

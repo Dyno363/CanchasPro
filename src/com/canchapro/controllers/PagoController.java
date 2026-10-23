@@ -91,18 +91,33 @@ public class PagoController {
         return r.getEstado() == EstadoReserva.PENDIENTE
                 && r.calcularPorcentajePagado() + MonedaUtil.TOLERANCIA >= minimo;
     }
+    /**
+     * Lo que la reserva DEBE en total: su saldo (cancha + servicios - pagos) más
+     * el consumo de tienda que dejó a cuenta. Una cancelada ya no debe la cancha,
+     * pero sí lo que consumió. Lo usan la tabla de reservas y la tarjeta "Saldo pendiente".
+     */
+    public double getSaldoTotal(Reserva r) {
+        double saldoReserva = r.getEstado() == EstadoReserva.CANCELADA ? 0 : r.calcularSaldo();
+        return MonedaUtil.redondear(saldoReserva + complejo.calcularConsumoPendiente(r));
+    }
+     /**
+     * ¿Hay algo que cobrarle a esta reserva? Su saldo (si no está cancelada) o
+     * consumo de tienda que dejó a cuenta. La vista lo usa para habilitar "Registrar pago".
+     */
+    public boolean tieneAlgoPorCobrar(Reserva r) {
+        return getSaldoTotal(r) > 0;
+    }
 
-    /** Reservas no canceladas que aún deben dinero (reporte "pagos pendientes"). */
+    /** Reservas que aún deben dinero: saldo de cancha o consumo de tienda a cuenta. */
     public List<Reserva> getReservasConSaldo() {
         List<Reserva> resultado = new ArrayList<>();
         for (Reserva r : complejo.getReservas()) {
-            if (r.getEstado() != EstadoReserva.CANCELADA && !r.estaPagada()) {
+            if (tieneAlgoPorCobrar(r)) {
                 resultado.add(r);
             }
         }
         return resultado;
     }
-
     /** Dinero recibido por reservas en una fecha (indicador del dashboard). */
     public double getTotalCobrado(LocalDate fecha) {
         double total = 0;

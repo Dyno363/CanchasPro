@@ -56,7 +56,7 @@ public class IndicadoresController {
         List<Reserva> conSaldo = pagoController.getReservasConSaldo();
         double saldo = 0;
         for (Reserva r : conSaldo) {
-            saldo += r.calcularSaldo();
+            saldo += pagoController.getSaldoTotal(r); // incluye tienda a cuenta
         }
         return new ResumenReservas(activas, pendientes, enCurso, pagoController.getTotalCobrado(fecha),
                 MonedaUtil.redondear(saldo), conSaldo.size());

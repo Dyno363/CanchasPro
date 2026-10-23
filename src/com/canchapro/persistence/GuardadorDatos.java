@@ -24,7 +24,9 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.DayOfWeek;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.StringJoiner;
 /**
  *
@@ -37,18 +39,20 @@ import java.util.StringJoiner;
  * Cada archivo se reescribe completo a partir de las colecciones del
  * ComplejoDeportivo. Las columnas y su orden deben coincidir EXACTAMENTE con
  * lo que espera CargadorDatos; por eso los encabezados están definidos aquí
- * como constantes, uno por archivo
+ * como constantes, uno por archivo.
  *
- *Formato de los valores
- * 
+ * Guardado "todo o nada": primero se arman TODAS las filas en memoria y solo
+ * después se escriben los archivos. Si algo falla al armar, ningún archivo se toca.
+ *
+ * Formato de los valores
+ *
  *   Fechas: ISO (2026-10-06T15:00) con FechaUtil.aCsv().
  *   Montos: punto decimal y 2 decimales (150.00) con MonedaUtil.aCsv().
  *   Enums: name() (MANTENIMIENTO), nunca toString() ("En mantenimiento").
  *   Opcionales vacíos: "" (dos ; seguidos).
- * 
  */
 public class GuardadorDatos {
-    
+
     // Encabezados: el número de columnas debe coincidir con CargadorDatos.
     static final String[] ENC_USUARIOS = {"codigo", "nombre", "telefono", "username", "passwordHash", "rol", "activo"};
     static final String[] ENC_CLIENTES = {"codigo", "nombre", "telefono", "correo", "fechaRegistro"};
@@ -61,7 +65,8 @@ public class GuardadorDatos {
         "estado", "fechaCreacion", "creadaPor", "fechaCancelacion", "motivoCancelacion", "canceladaPor"};
     static final String[] ENC_SERVICIOS_RESERVA = {"codigoReserva", "codigoServicio", "cantidad", "precioUnitario", "horas"};
     static final String[] ENC_PAGOS = {"codigo", "codigoReserva", "fechaHora", "monto", "metodo", "observacion"};
-    static final String[] ENC_VENTAS = {"numero", "fechaHora", "codigoReserva", "metodoPago", "vendedor", "total"};
+    static final String[] ENC_VENTAS = {"numero", "fechaHora", "codigoReserva", "metodoPago", "vendedor", "total",
+        "fechaPago"};
     static final String[] ENC_DETALLE_VENTAS = {"numeroVenta", "codigoProducto", "cantidad", "precioUnitario", "subtotal"};
 
     private final Path carpeta;
@@ -81,21 +86,40 @@ public class GuardadorDatos {
      * @throws IOException si algún archivo no se puede escribir
      */
     public int guardar(ComplejoDeportivo complejo) throws IOException {
+        // 1) Armar TODAS las filas en memoria. Si algo falla aquí, ningún archivo se tocó.
+        Map<String, List<String[]>> filas = new LinkedHashMap<>();
+        filas.put(CargadorDatos.ARCHIVO_USUARIOS, filasUsuarios(complejo));
+        filas.put(CargadorDatos.ARCHIVO_CLIENTES, filasClientes(complejo));
+        filas.put(CargadorDatos.ARCHIVO_CANCHAS, filasCanchas(complejo));
+        filas.put(CargadorDatos.ARCHIVO_TARIFAS, filasTarifas(complejo));
+        filas.put(CargadorDatos.ARCHIVO_SERVICIOS, filasServicios(complejo));
+        filas.put(CargadorDatos.ARCHIVO_PRODUCTOS, filasProductos(complejo));
+        filas.put(CargadorDatos.ARCHIVO_RESERVAS, filasReservas(complejo));
+        filas.put(CargadorDatos.ARCHIVO_SERVICIOS_RESERVA, filasServiciosReserva(complejo));
+        filas.put(CargadorDatos.ARCHIVO_PAGOS, filasPagos(complejo));
+        filas.put(CargadorDatos.ARCHIVO_VENTAS, filasVentas(complejo));
+        filas.put(CargadorDatos.ARCHIVO_DETALLE_VENTAS, filasDetalleVentas(complejo));
+
+        // 2) Recién ahora se escriben los archivos (mismo orden).
+        Map<String, String[]> encabezados = new LinkedHashMap<>();
+        encabezados.put(CargadorDatos.ARCHIVO_USUARIOS, ENC_USUARIOS);
+        encabezados.put(CargadorDatos.ARCHIVO_CLIENTES, ENC_CLIENTES);
+        encabezados.put(CargadorDatos.ARCHIVO_CANCHAS, ENC_CANCHAS);
+        encabezados.put(CargadorDatos.ARCHIVO_TARIFAS, ENC_TARIFAS);
+        encabezados.put(CargadorDatos.ARCHIVO_SERVICIOS, ENC_SERVICIOS);
+        encabezados.put(CargadorDatos.ARCHIVO_PRODUCTOS, ENC_PRODUCTOS);
+        encabezados.put(CargadorDatos.ARCHIVO_RESERVAS, ENC_RESERVAS);
+        encabezados.put(CargadorDatos.ARCHIVO_SERVICIOS_RESERVA, ENC_SERVICIOS_RESERVA);
+        encabezados.put(CargadorDatos.ARCHIVO_PAGOS, ENC_PAGOS);
+        encabezados.put(CargadorDatos.ARCHIVO_VENTAS, ENC_VENTAS);
+        encabezados.put(CargadorDatos.ARCHIVO_DETALLE_VENTAS, ENC_DETALLE_VENTAS);
+
         ArchivoConfiguracion.guardar(complejo.getConfiguracion(),
                 carpeta.resolve(ArchivoConfiguracion.NOMBRE_ARCHIVO));
-
         int total = 0;
-        total += escribir(CargadorDatos.ARCHIVO_USUARIOS, ENC_USUARIOS, filasUsuarios(complejo));
-        total += escribir(CargadorDatos.ARCHIVO_CLIENTES, ENC_CLIENTES, filasClientes(complejo));
-        total += escribir(CargadorDatos.ARCHIVO_CANCHAS, ENC_CANCHAS, filasCanchas(complejo));
-        total += escribir(CargadorDatos.ARCHIVO_TARIFAS, ENC_TARIFAS, filasTarifas(complejo));
-        total += escribir(CargadorDatos.ARCHIVO_SERVICIOS, ENC_SERVICIOS, filasServicios(complejo));
-        total += escribir(CargadorDatos.ARCHIVO_PRODUCTOS, ENC_PRODUCTOS, filasProductos(complejo));
-        total += escribir(CargadorDatos.ARCHIVO_RESERVAS, ENC_RESERVAS, filasReservas(complejo));
-        total += escribir(CargadorDatos.ARCHIVO_SERVICIOS_RESERVA, ENC_SERVICIOS_RESERVA, filasServiciosReserva(complejo));
-        total += escribir(CargadorDatos.ARCHIVO_PAGOS, ENC_PAGOS, filasPagos(complejo));
-        total += escribir(CargadorDatos.ARCHIVO_VENTAS, ENC_VENTAS, filasVentas(complejo));
-        total += escribir(CargadorDatos.ARCHIVO_DETALLE_VENTAS, ENC_DETALLE_VENTAS, filasDetalleVentas(complejo));
+        for (Map.Entry<String, List<String[]>> archivo : filas.entrySet()) {
+            total += escribir(archivo.getKey(), encabezados.get(archivo.getKey()), archivo.getValue());
+        }
         return total;
     }
 
@@ -241,7 +265,10 @@ public class GuardadorDatos {
     //  TIENDA
     // =====================================================================
 
-    /** Solo se guardan las ventas CONFIRMADAS: un carrito a medio armar no es una venta. */
+    /**
+     * Solo se guardan las ventas CONFIRMADAS: un carrito a medio armar no es una venta.
+     * metodoPago y fechaPago vacíos = venta "a cuenta" de una reserva, todavía sin cobrar.
+     */
     private static List<String[]> filasVentas(ComplejoDeportivo complejo) {
         List<String[]> filas = new ArrayList<>();
         for (Venta v : complejo.getVentas()) {
@@ -250,8 +277,10 @@ public class GuardadorDatos {
             }
             filas.add(new String[]{v.getNumero(), FechaUtil.aCsv(v.getFechaHora()),
                 v.getReserva() == null ? "" : v.getReserva().getCodigo(),
-                v.getMetodoPago().name(), v.getVendedor().getCodigo(),
-                MonedaUtil.aCsv(v.calcularTotal())});
+                v.isPendienteDePago() ? "" : v.getMetodoPago().name(),
+                v.getVendedor().getCodigo(),
+                MonedaUtil.aCsv(v.calcularTotal()),
+                v.getFechaPago() == null ? "" : FechaUtil.aCsv(v.getFechaPago())});
         }
         return filas;
     }
